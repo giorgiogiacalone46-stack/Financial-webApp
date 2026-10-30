@@ -16,7 +16,8 @@ export class StoricoView {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
       currency: 'EUR',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      useGrouping: 'always'
     }).format(value || 0);
   }
 
@@ -31,9 +32,16 @@ export class StoricoView {
       : rawData.filter(d => d.month.endsWith(this.selectedYear));
 
     const firstVal = filteredData.length > 0 ? filteredData[0].value : 0;
-    const lastVal = summary.netWorth;
+    const lastVal = this.selectedYear === 'all'
+      ? summary.netWorth
+      : (filteredData.length > 0 ? filteredData[filteredData.length - 1].value : summary.netWorth);
     const netGrowth = lastVal - firstVal;
     const growthPercent = firstVal > 0 ? ((netGrowth / firstVal) * 100).toFixed(1) : 0;
+    const isGrowthPositive = netGrowth >= 0;
+
+    const bannerSub = this.selectedYear === 'all'
+      ? `Da ${filteredData[0]?.month || '01/2024'} a oggi`
+      : `Performance consolidata anno ${this.selectedYear} (${filteredData[0]?.month || ''} → ${filteredData[filteredData.length - 1]?.month || ''})`;
 
     container.innerHTML = `
       <div class="storico-layout">
@@ -42,12 +50,14 @@ export class StoricoView {
         <div class="storico-toolbar">
           <div class="storico-kpi-banner">
             <div>
-              <span class="banner-label">Crescita Totale Registrata</span>
+              <span class="banner-label">Variazione Net Worth ${this.selectedYear === 'all' ? 'Complessiva' : this.selectedYear}</span>
               <div class="banner-value-row">
                 <span class="banner-val">${this.formatCurrency(lastVal)}</span>
-                <span class="banner-badge positive">+${growthPercent}% (+${this.formatCurrency(netGrowth)})</span>
+                <span class="banner-badge ${isGrowthPositive ? 'positive' : 'negative'}">
+                  ${isGrowthPositive ? '+' : ''}${growthPercent}% (${isGrowthPositive ? '+' : ''}${this.formatCurrency(netGrowth)})
+                </span>
               </div>
-              <span class="banner-sub">Da ${filteredData[0]?.month || '01/2024'} a oggi</span>
+              <span class="banner-sub">${bannerSub}</span>
             </div>
           </div>
 
@@ -62,7 +72,7 @@ export class StoricoView {
         <!-- Grafico Evoluzione Net Worth -->
         <section class="chart-card">
           <div class="chart-header">
-            <div>
+            <div class="chart-title-group">
               <h3>Evoluzione Net Worth Nel Tempo</h3>
               <span class="chart-subtitle">Andamento del patrimonio complessivo (foglio Historical NW)</span>
             </div>
@@ -75,7 +85,10 @@ export class StoricoView {
         <!-- Matrice Storica / Tabella Mensile -->
         <section class="historical-table-card">
           <div class="chart-header">
-            <h3>Riepilogo Storico per Mensilità</h3>
+            <div class="chart-title-group">
+              <h3>Riepilogo Storico per Mensilità</h3>
+              <span class="chart-subtitle">Variazioni e snapshot registrati mese per mese</span>
+            </div>
           </div>
           <div class="hist-table-container">
             <table class="apple-table">
@@ -116,15 +129,15 @@ export class StoricoView {
       </div>
     `;
 
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       this.initChart(filteredData);
       this.bindEvents(container);
-    }, 60);
+    });
   }
 
   destroyCharts() {
     if (this.historyChart) {
-      this.historyChart.destroy();
+      try { this.historyChart.destroy(); } catch (e) {}
       this.historyChart = null;
     }
   }
@@ -133,7 +146,13 @@ export class StoricoView {
     const canvas = document.getElementById('historicalNWCanvas');
     if (!canvas || !window.Chart) return;
 
+    if (this.historyChart) {
+      try { this.historyChart.destroy(); } catch (e) {}
+    }
+
     const ctx = canvas.getContext('2d');
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
     const grad = ctx.createLinearGradient(0, 0, 0, 280);
     grad.addColorStop(0, 'rgba(0, 113, 227, 0.35)');
     grad.addColorStop(1, 'rgba(0, 113, 227, 0.0)');
@@ -160,14 +179,33 @@ export class StoricoView {
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: isDark ? 'rgba(28, 28, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark ? '#FFFFFF' : '#000000',
+            bodyColor: isDark ? '#E5E5EA' : '#1C1C1E',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            padding: 10,
             callbacks: {
               label: (ctx) => ` Patrimonio: ${this.formatCurrency(ctx.parsed.y)}`
             }
           }
         },
         scales: {
-          x: { grid: { display: false } },
-          y: { grid: { color: 'rgba(255, 255, 255, 0.06)' }, ticks: { callback: (v) => '€' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v) } }
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: isDark ? '#98989D' : '#86868B',
+              font: { size: 11 }
+            }
+          },
+          y: {
+            grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)' },
+            ticks: {
+              color: isDark ? '#98989D' : '#86868B',
+              font: { size: 11 },
+              callback: (v) => '€' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+            }
+          }
         }
       }
     });

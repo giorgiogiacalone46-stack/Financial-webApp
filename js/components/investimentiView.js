@@ -1,9 +1,9 @@
 /**
  * Apple Design System - Investimenti & Patrimonio Reale
- * - Asset Allocation reale da scheda Saldi (XEON, VWCE, Fondo Pensione, Liquidità)
- * - Calcolo Net Worth aggregato (17.354,81 €)
- * - Simulatore PAC interattivo Apple Spec (su VWCE con versamento mensile 200€)
- * - Pillole finanziarie
+ * - Asset Allocation dinamica da Conti & Saldi reali (XEON, VWCE, Pensione, Liquidità)
+ * - Calcolo aggregato del Net Worth con percentuali precise
+ * - Scheda Strumenti di Investimento dettagliata
+ * - Simulatore PAC interattivo Apple Spec (su VWCE con versamento mensile e crescita composta)
  */
 
 import { financeStore } from '../data/mockData.js';
@@ -24,7 +24,8 @@ export class InvestimentiView {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
       currency: 'EUR',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      useGrouping: 'always'
     }).format(value || 0);
   }
 
@@ -32,23 +33,62 @@ export class InvestimentiView {
     this.destroyCharts();
     const accounts = financeStore.getAccounts();
 
-    // Rileva saldi reali
-    const xeon = accounts.find(a => a.name.includes('XEON'))?.balance || 5383.32;
-    const vwce = accounts.find(a => a.name.includes('VWCE'))?.balance || 3410.25;
-    const pensione = accounts.find(a => a.name.includes('Pensione'))?.balance || 4391.24;
-    const liquid = (accounts.find(a => a.name.includes('Buddybank'))?.balance || 4160.00) + (accounts.find(a => a.name.includes('Contanti'))?.balance || 10.00);
+    // Rileva saldi dai conti dinamicamente
+    let xeon = 0;
+    let vwce = 0;
+    let pensione = 0;
+    let liquid = 0;
+    const customInvestments = [];
 
-    const totalPortfolio = xeon + vwce + pensione + liquid;
-    const totalInvestedDirect = xeon + vwce;
+    accounts.forEach(acc => {
+      const nameLower = acc.name.toLowerCase();
+      const typeLower = (acc.type || '').toLowerCase();
+      const bal = parseFloat(acc.balance) || 0;
+
+      if (nameLower.includes('xeon') || typeLower.includes('monetari')) {
+        xeon += bal;
+      } else if (nameLower.includes('vwce') || nameLower.includes('all-world') || typeLower.includes('etf')) {
+        vwce += bal;
+      } else if (acc.isPension || nameLower.includes('pensione') || typeLower.includes('previden')) {
+        pensione += bal;
+      } else if (acc.isInvestment || typeLower.includes('invest')) {
+        customInvestments.push({ name: acc.name, amount: bal, type: acc.type || 'Investimento' });
+      } else {
+        liquid += bal;
+      }
+    });
+
+    // Se per qualche motivo i saldi base sono 0, fallback di sicurezza sui saldi consolidati
+    if (xeon === 0 && vwce === 0 && pensione === 0) {
+      xeon = 5383.32;
+      vwce = 3410.25;
+      pensione = 4391.24;
+      liquid = 4170.00;
+    }
+
+    // Se il capitale iniziale del simulatore era il default, sincronizzalo con il saldo VWCE attuale
+    if (this.pacParams.initialCapital === 3410 && vwce > 0) {
+      this.pacParams.initialCapital = Math.round(vwce);
+    }
+
+    const totalPortfolio = xeon + vwce + pensione + liquid + customInvestments.reduce((sum, i) => sum + i.amount, 0);
+    const totalInvestedDirect = xeon + vwce + customInvestments.reduce((sum, i) => sum + i.amount, 0);
 
     const allocationData = [
-      { name: 'Trade Republic - XEON (Sicurezza / Emergenza)', amount: xeon, color: '#34C759', type: 'Monetario Overnight' },
-      { name: 'Trade Republic - VWCE (Azionario Globale PAC)', amount: vwce, color: '#0071E3', type: 'ETF Globale' },
-      { name: 'Fondo Pensione (Previdenza Complementare)', amount: pensione, color: '#AF52DE', type: 'Fondo Pensione' },
-      { name: 'Liquidità Corrente (Buddybank + Contanti)', amount: liquid, color: '#FF9500', type: 'Conto Corrente' }
-    ].map(item => ({
+      { name: 'Trade Republic - XEON (Fondo Emergenza)', amount: xeon, color: '#34C759', ticker: 'XEON', type: 'Monetario Overnight' },
+      { name: 'Trade Republic - VWCE (Azionario Globale)', amount: vwce, color: '#0071E3', ticker: 'VWCE', type: 'ETF Azionario All-World' },
+      { name: 'Previdenza Integrativa (Fondo Pensione)', amount: pensione, color: '#AF52DE', ticker: 'FONDO', type: 'Fondo Pensione' },
+      ...customInvestments.map((ci, idx) => ({
+        name: ci.name,
+        amount: ci.amount,
+        color: ['#FF9500', '#5856D6', '#FF2D55'][idx % 3],
+        ticker: 'ASSET',
+        type: ci.type
+      })),
+      { name: 'Liquidità Corrente (Conti & Contanti)', amount: liquid, color: '#FF9500', ticker: 'CASH', type: 'Liquidità' }
+    ].filter(item => item.amount > 0).map(item => ({
       ...item,
-      percentage: ((item.amount / totalPortfolio) * 100).toFixed(1)
+      percentage: totalPortfolio > 0 ? ((item.amount / totalPortfolio) * 100).toFixed(1) : 0
     }));
 
     container.innerHTML = `
@@ -61,14 +101,16 @@ export class InvestimentiView {
             <div class="kpi-header">
               <span class="kpi-label">Patrimonio Complessivo</span>
               <div class="kpi-icon-badge balance">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
               </div>
             </div>
             <div class="kpi-body">
               <span class="kpi-value">${this.formatCurrency(totalPortfolio)}</span>
               <div class="kpi-footer">
                 <span class="trend-badge positive">Dati Reali</span>
-                <span class="trend-context">Sincronizzato da Saldi</span>
+                <span class="trend-context">Liquidità + Investimenti + Pensione</span>
               </div>
             </div>
           </div>
@@ -77,7 +119,10 @@ export class InvestimentiView {
             <div class="kpi-header">
               <span class="kpi-label">Investito Diretto (ETF & Monetario)</span>
               <div class="kpi-icon-badge income">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                  <polyline points="16 7 22 7 22 13"></polyline>
+                </svg>
               </div>
             </div>
             <div class="kpi-body">
@@ -90,36 +135,39 @@ export class InvestimentiView {
 
           <div class="kpi-card">
             <div class="kpi-header">
-              <span class="kpi-label">Previdenza Complementare</span>
-              <div class="kpi-icon-badge" style="background: rgba(175, 82, 222, 0.15); color: #AF52DE;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span class="kpi-label">Previdenza Integrativa</span>
+              <div class="kpi-icon-badge" style="background: linear-gradient(135deg, #AF52DE, #BF5AF2); color: #FFFFFF;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
               </div>
             </div>
             <div class="kpi-body">
               <span class="kpi-value">${this.formatCurrency(pensione)}</span>
               <div class="kpi-footer">
-                <span class="trend-context">Fondo Pensione di Categoria</span>
+                <span class="trend-context">${((pensione / (totalPortfolio || 1)) * 100).toFixed(1)}% del patrimonio totale</span>
               </div>
             </div>
           </div>
 
         </section>
 
-        <!-- 2. Asset Allocation Reale & Strategia -->
+        <!-- 2. Asset Allocation Reale & Dettaglio Strumenti -->
         <section class="investimenti-main-grid">
           
+          <!-- Donut Card -->
           <div class="chart-card donut-card">
             <div class="chart-header">
               <div class="chart-title-group">
                 <h3>Asset Allocation Reale</h3>
-                <span class="chart-subtitle">Ripartizione del patrimonio secondo la scheda Saldi</span>
+                <span class="chart-subtitle">Ripartizione del patrimonio dai saldi registrati</span>
               </div>
             </div>
             <div class="donut-chart-container">
               <div class="donut-canvas-wrapper">
                 <canvas id="investmentsDonutCanvas"></canvas>
                 <div class="donut-center-text">
-                  <span class="donut-center-label">Totale Net Worth</span>
+                  <span class="donut-center-label">Net Worth</span>
                   <span class="donut-center-value">${this.formatCurrency(totalPortfolio)}</span>
                 </div>
               </div>
@@ -127,7 +175,7 @@ export class InvestimentiView {
                 ${allocationData.map(a => `
                   <div class="legend-item">
                     <span class="legend-color-dot" style="background-color: ${a.color};"></span>
-                    <span class="legend-name">${a.name}</span>
+                    <span class="legend-name" title="${a.name}">${a.name}</span>
                     <span class="legend-percent">${a.percentage}%</span>
                     <span class="legend-amount">${this.formatCurrency(a.amount)}</span>
                   </div>
@@ -136,52 +184,69 @@ export class InvestimentiView {
             </div>
           </div>
 
-          <!-- Dettaglio Strumenti Reali -->
+          <!-- Dettaglio Strumenti Reali Card -->
           <div class="invest-holdings-card">
             <div class="chart-header">
-              <h3>Strumenti & Conti di Investimento</h3>
+              <div class="chart-title-group">
+                <h3>Strumenti & Strategia</h3>
+                <span class="chart-subtitle">Composizione e obiettivi dei pilastri di investimento</span>
+              </div>
             </div>
             <div class="holdings-list">
               
               <div class="holding-row">
                 <div class="holding-info">
                   <div class="holding-ticker-badge" style="background: rgba(52, 199, 89, 0.15); color: #34C759;">XEON</div>
-                  <div>
+                  <div class="holding-text-group">
                     <span class="holding-name">Trade Republic - XEON</span>
                     <span class="holding-type">Fondo Emergenza / Monetario Overnight</span>
                   </div>
                 </div>
                 <div class="holding-values">
                   <span class="holding-amount">${this.formatCurrency(xeon)}</span>
-                  <span class="holding-sub">Target reintegro: +1.500 €</span>
+                  <span class="holding-sub" style="color: #34C759;">Rendimento cassa attivo</span>
                 </div>
               </div>
 
               <div class="holding-row">
                 <div class="holding-info">
                   <div class="holding-ticker-badge" style="background: rgba(0, 113, 227, 0.15); color: #0071E3;">VWCE</div>
-                  <div>
+                  <div class="holding-text-group">
                     <span class="holding-name">Trade Republic - VWCE</span>
-                    <span class="holding-type">Azionario Globale All-World (PAC attivo 200 €/mese)</span>
+                    <span class="holding-type">Azionario All-World (PAC 200 €/mese)</span>
                   </div>
                 </div>
                 <div class="holding-values">
                   <span class="holding-amount">${this.formatCurrency(vwce)}</span>
-                  <span class="holding-sub" style="color: #34C759;">In arrivo 200 € a inizio mese</span>
+                  <span class="holding-sub" style="color: #0071E3;">Versamento mensile attivo</span>
                 </div>
               </div>
 
               <div class="holding-row">
                 <div class="holding-info">
-                  <div class="holding-ticker-badge" style="background: rgba(175, 82, 222, 0.15); color: #AF52DE;">PENSIONE</div>
-                  <div>
-                    <span class="holding-name">Fondo Pensione</span>
-                    <span class="holding-type">Previdenza Complementare Integrativa</span>
+                  <div class="holding-ticker-badge" style="background: rgba(175, 82, 222, 0.15); color: #AF52DE;">FONDO</div>
+                  <div class="holding-text-group">
+                    <span class="holding-name">Previdenza Complementare</span>
+                    <span class="holding-type">Fondo Pensione Integrativo di Categoria</span>
                   </div>
                 </div>
                 <div class="holding-values">
                   <span class="holding-amount">${this.formatCurrency(pensione)}</span>
-                  <span class="holding-sub">Snapshot consolidato</span>
+                  <span class="holding-sub">Deduzione fiscale annuale</span>
+                </div>
+              </div>
+
+              <div class="holding-row">
+                <div class="holding-info">
+                  <div class="holding-ticker-badge" style="background: rgba(255, 149, 0, 0.15); color: #FF9500;">LIQUID</div>
+                  <div class="holding-text-group">
+                    <span class="holding-name">Liquidità Disponibile</span>
+                    <span class="holding-type">Buddybank + Buoni Pasto + Contanti</span>
+                  </div>
+                </div>
+                <div class="holding-values">
+                  <span class="holding-amount">${this.formatCurrency(liquid)}</span>
+                  <span class="holding-sub">Cassa corrente</span>
                 </div>
               </div>
 
@@ -190,12 +255,12 @@ export class InvestimentiView {
 
         </section>
 
-        <!-- 3. Simulatore PAC & Interesse Composto Apple Spec -->
+        <!-- 3. Simulatore PAC & Crescita Composta Apple Spec -->
         <section class="simulator-card">
           <div class="chart-header">
-            <div>
+            <div class="chart-title-group">
               <h3>Simulatore PAC & Crescita Composta</h3>
-              <span class="card-subtitle">Calcola la proiezione futura del tuo PAC azionario (es. VWCE)</span>
+              <span class="chart-subtitle">Proietta la crescita del tuo piano di accumulo su VWCE e calcola l'interesse composto</span>
             </div>
           </div>
 
@@ -208,7 +273,7 @@ export class InvestimentiView {
                   <span class="sim-label">Capitale Iniziale (€)</span>
                   <span class="sim-value" id="val-capitale-iniziale">${this.formatCurrency(this.pacParams.initialCapital)}</span>
                 </div>
-                <input type="range" class="apple-slider" id="slider-capitale" min="0" max="25000" step="250" value="${this.pacParams.initialCapital}">
+                <input type="range" class="apple-slider" id="slider-capitale" min="0" max="30000" step="250" value="${this.pacParams.initialCapital}">
               </div>
 
               <div class="sim-control-group">
@@ -236,7 +301,7 @@ export class InvestimentiView {
               </div>
             </div>
 
-            <!-- Proiezione Grafica & Risultato -->
+            <!-- Proiezione Grafica & Risultati -->
             <div class="sim-results-pane">
               <div class="sim-kpi-summary">
                 <div class="sim-kpi">
@@ -263,20 +328,21 @@ export class InvestimentiView {
       </div>
     `;
 
-    setTimeout(() => {
+    // Render grafici dopo inserimento DOM
+    requestAnimationFrame(() => {
       this.initAllocationDonut(allocationData);
       this.updatePacSimulation();
       this.bindSimulatorEvents();
-    }, 60);
+    });
   }
 
   destroyCharts() {
     if (this.allocationChart) {
-      this.allocationChart.destroy();
+      try { this.allocationChart.destroy(); } catch (e) {}
       this.allocationChart = null;
     }
     if (this.pacChart) {
-      this.pacChart.destroy();
+      try { this.pacChart.destroy(); } catch (e) {}
       this.pacChart = null;
     }
   }
@@ -284,6 +350,12 @@ export class InvestimentiView {
   initAllocationDonut(allocationData) {
     const canvas = document.getElementById('investmentsDonutCanvas');
     if (!canvas || !window.Chart) return;
+
+    if (this.allocationChart) {
+      try { this.allocationChart.destroy(); } catch (e) {}
+    }
+
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
     this.allocationChart = new window.Chart(canvas, {
       type: 'doughnut',
@@ -293,8 +365,8 @@ export class InvestimentiView {
           data: allocationData.map(a => a.amount),
           backgroundColor: allocationData.map(a => a.color),
           borderWidth: 2,
-          borderColor: '#1C1C1E',
-          hoverOffset: 4
+          borderColor: isDark ? '#1C1C1E' : '#FFFFFF',
+          hoverOffset: 6
         }]
       },
       options: {
@@ -304,6 +376,12 @@ export class InvestimentiView {
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: isDark ? 'rgba(28, 28, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark ? '#FFFFFF' : '#000000',
+            bodyColor: isDark ? '#E5E5EA' : '#1C1C1E',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            padding: 10,
             callbacks: {
               label: (ctx) => ` ${ctx.label}: ${this.formatCurrency(ctx.parsed)}`
             }
@@ -320,15 +398,21 @@ export class InvestimentiView {
     const sOri = document.getElementById('slider-orizzonte');
 
     const update = () => {
-      this.pacParams.initialCapital = parseFloat(sCap.value);
-      this.pacParams.monthlyDeposit = parseFloat(sVer.value);
-      this.pacParams.annualReturn = parseFloat(sRen.value);
-      this.pacParams.years = parseInt(sOri.value, 10);
+      if (!sCap || !sVer || !sRen || !sOri) return;
+      this.pacParams.initialCapital = parseFloat(sCap.value) || 0;
+      this.pacParams.monthlyDeposit = parseFloat(sVer.value) || 0;
+      this.pacParams.annualReturn = parseFloat(sRen.value) || 0;
+      this.pacParams.years = parseInt(sOri.value, 10) || 1;
 
-      document.getElementById('val-capitale-iniziale').textContent = this.formatCurrency(this.pacParams.initialCapital);
-      document.getElementById('val-versamento-mensile').textContent = this.formatCurrency(this.pacParams.monthlyDeposit);
-      document.getElementById('val-rendimento-annuo').textContent = this.pacParams.annualReturn + '%';
-      document.getElementById('val-orizzonte').textContent = this.pacParams.years + ' anni';
+      const elCap = document.getElementById('val-capitale-iniziale');
+      const elVer = document.getElementById('val-versamento-mensile');
+      const elRen = document.getElementById('val-rendimento-annuo');
+      const elOri = document.getElementById('val-orizzonte');
+
+      if (elCap) elCap.textContent = this.formatCurrency(this.pacParams.initialCapital);
+      if (elVer) elVer.textContent = this.formatCurrency(this.pacParams.monthlyDeposit);
+      if (elRen) elRen.textContent = this.pacParams.annualReturn + '%';
+      if (elOri) elOri.textContent = this.pacParams.years + ' anni';
 
       this.updatePacSimulation();
     };
@@ -381,11 +465,13 @@ export class InvestimentiView {
       this.pacChart.data.labels = labels;
       this.pacChart.data.datasets[0].data = investedData;
       this.pacChart.data.datasets[1].data = totalData;
-      this.pacChart.update();
+      this.pacChart.update('none'); // Update ultra rapido senza stuttering
       return;
     }
 
     const ctx = canvas.getContext('2d');
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
     this.pacChart = new window.Chart(ctx, {
       type: 'line',
       data: {
@@ -407,6 +493,7 @@ export class InvestimentiView {
             backgroundColor: 'rgba(52, 199, 89, 0.15)',
             borderWidth: 2.5,
             pointRadius: 3,
+            pointBackgroundColor: '#34C759',
             fill: true,
             tension: 0.3
           }
@@ -416,16 +503,43 @@ export class InvestimentiView {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 11 } } },
+          legend: {
+            position: 'top',
+            align: 'end',
+            labels: {
+              boxWidth: 10,
+              font: { size: 11, family: '-apple-system, BlinkMacSystemFont, "SF Pro Text"' },
+              color: isDark ? '#98989D' : '#86868B'
+            }
+          },
           tooltip: {
+            backgroundColor: isDark ? 'rgba(28, 28, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            titleColor: isDark ? '#FFFFFF' : '#000000',
+            bodyColor: isDark ? '#E5E5EA' : '#1C1C1E',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            borderWidth: 1,
+            padding: 10,
             callbacks: {
               label: (ctx) => ` ${ctx.dataset.label}: ${this.formatCurrency(ctx.parsed.y)}`
             }
           }
         },
         scales: {
-          x: { grid: { display: false } },
-          y: { grid: { color: 'rgba(255, 255, 255, 0.06)' }, ticks: { callback: (v) => '€' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v) } }
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: isDark ? '#98989D' : '#86868B',
+              font: { size: 11 }
+            }
+          },
+          y: {
+            grid: { color: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)' },
+            ticks: {
+              color: isDark ? '#98989D' : '#86868B',
+              font: { size: 11 },
+              callback: (v) => '€' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+            }
+          }
         }
       }
     });

@@ -1,9 +1,9 @@
 /**
- * Apple Design System - Movimenti View Component (Ottimizzato Mobile)
- * - Zero overflow orizzontale su iPhone
- * - Categorie con emoji reali
- * - Supporto conti reali (Buddybank, Trade Republic, Contanti, Buoni Pasto)
- * - Tipi: Uscita, Entrata, Trasferimento
+ * Apple Design System - Movimenti View Component (Ottimizzato Desktop & Mobile)
+ * - Zero overflow orizzontale su iPhone e MacBook
+ * - Categorie con emoji e badge semantici
+ * - Supporto tipi: Uscita, Entrata, Trasferimento con conto destinazione
+ * - Ricerca istantanea, filtri rapidi, ordinamento dinamico
  */
 
 import { financeStore } from '../data/mockData.js';
@@ -24,8 +24,37 @@ export class MovimentiView {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
       currency: 'EUR',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      useGrouping: 'always'
     }).format(value || 0);
+  }
+
+  parseDateKey(dateStr) {
+    if (!dateStr) return '00000000';
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split('/');
+      return `${y}${m}${d}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr.replace(/-/g, '');
+    }
+    return dateStr;
+  }
+
+  formatDateParts(dateStr) {
+    const months = ['GEN', 'FEB', 'MAR', 'APR', 'MAG', 'GIU', 'LUG', 'AGO', 'SET', 'OTT', 'NOV', 'DIC'];
+    if (!dateStr) return { day: '--', monthYear: '---' };
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split('/');
+      const mIdx = Math.max(0, Math.min(11, parseInt(m, 10) - 1));
+      return { day: d, monthYear: `${months[mIdx]} '${y.slice(-2)}` };
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-');
+      const mIdx = Math.max(0, Math.min(11, parseInt(m, 10) - 1));
+      return { day: d, monthYear: `${months[mIdx]} '${y.slice(-2)}` };
+    }
+    return { day: dateStr.slice(0, 2), monthYear: dateStr.slice(3) };
   }
 
   getFilteredTransactions() {
@@ -50,7 +79,7 @@ export class MovimentiView {
 
     switch (this.filters.sortBy) {
       case 'date-asc':
-        txs.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        txs.sort((a, b) => this.parseDateKey(a.date).localeCompare(this.parseDateKey(b.date)));
         break;
       case 'amount-desc':
         txs.sort((a, b) => b.amount - a.amount);
@@ -59,7 +88,7 @@ export class MovimentiView {
         txs.sort((a, b) => a.amount - b.amount);
         break;
       default: // date-desc
-        txs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        txs.sort((a, b) => this.parseDateKey(b.date).localeCompare(this.parseDateKey(a.date)));
     }
 
     return txs;
@@ -106,13 +135,13 @@ export class MovimentiView {
           </div>
         </section>
 
-        <!-- Search & Filter Controls (Mobile Safe) -->
+        <!-- Search & Filter Controls -->
         <section class="movimenti-toolbar">
           <div class="movimenti-search-box">
             <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="mov-search" class="movimenti-search-input" placeholder="Cerca spesa, categoria, conto..." value="${this.filters.search}" autocomplete="off" />
+            <input type="text" id="mov-search" class="movimenti-search-input" placeholder="Cerca per descrizione, categoria o conto..." value="${this.filters.search}" autocomplete="off" />
             ${this.filters.search ? `<button class="search-clear-btn" id="mov-search-clear">&times;</button>` : ''}
           </div>
 
@@ -137,10 +166,10 @@ export class MovimentiView {
 
               <div class="apple-select-wrapper">
                 <select id="mov-sort-filter" class="apple-select">
-                  <option value="date-desc" ${this.filters.sortBy === 'date-desc' ? 'selected' : ''}>Data ↓</option>
-                  <option value="date-asc" ${this.filters.sortBy === 'date-asc' ? 'selected' : ''}>Data ↑</option>
-                  <option value="amount-desc" ${this.filters.sortBy === 'amount-desc' ? 'selected' : ''}>Importo ↓</option>
-                  <option value="amount-asc" ${this.filters.sortBy === 'amount-asc' ? 'selected' : ''}>Importo ↑</option>
+                  <option value="date-desc" ${this.filters.sortBy === 'date-desc' ? 'selected' : ''}>Data più recente</option>
+                  <option value="date-asc" ${this.filters.sortBy === 'date-asc' ? 'selected' : ''}>Data meno recente</option>
+                  <option value="amount-desc" ${this.filters.sortBy === 'amount-desc' ? 'selected' : ''}>Importo più alto</option>
+                  <option value="amount-asc" ${this.filters.sortBy === 'amount-asc' ? 'selected' : ''}>Importo più basso</option>
                 </select>
                 <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
@@ -171,7 +200,7 @@ export class MovimentiView {
           ` : `
             <div class="mov-empty-state">
               <h3>Nessun movimento trovato</h3>
-              <p>Prova a modificare i filtri o la ricerca.</p>
+              <p>Prova a modificare i filtri o il testo di ricerca.</p>
             </div>
           `}
         </section>
@@ -188,11 +217,13 @@ export class MovimentiView {
     const isTransfer = tx.type === 'transfer';
     let typeClass = isIncome ? 'income' : (isTransfer ? 'transfer' : 'expense');
     let sign = isIncome ? '+' : (isTransfer ? '⇄ ' : '-');
+    const dateParts = this.formatDateParts(tx.date);
 
     return `
       <div class="mov-table-row" data-id="${tx.id}">
-        <div class="mov-col mov-col-date">
-          <span class="mov-date-day">${tx.date}</span>
+        <div class="mov-col mov-col-date" title="${tx.date || ''}">
+          <span class="mov-date-day">${dateParts.day}</span>
+          <span class="mov-date-month">${dateParts.monthYear}</span>
         </div>
         <div class="mov-col mov-col-desc">
           <span class="mov-desc-title">${tx.description || 'Movimento'}</span>
@@ -207,7 +238,7 @@ export class MovimentiView {
           ${sign}${this.formatCurrency(tx.amount)}
         </div>
         <div class="mov-col mov-col-actions">
-          <button class="mov-delete-btn" data-id="${tx.id}" data-row="${tx.rowNumber || ''}" title="Elimina">
+          <button class="mov-delete-btn" data-id="${tx.id}" data-row="${tx.rowNumber || ''}" title="Elimina movimento">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
@@ -231,11 +262,11 @@ export class MovimentiView {
           <form class="modal-form" id="add-tx-form" onsubmit="return false;">
             
             <div class="form-group">
-              <label class="form-label">Tipo</label>
+              <label class="form-label">Tipo Movimento</label>
               <div class="segmented-control form-segmented" id="form-type-toggle">
                 <button type="button" class="segment-btn active" data-type="expense">Uscita</button>
                 <button type="button" class="segment-btn" data-type="income">Entrata</button>
-                <button type="button" class="segment-btn" data-type="transfer">Trasferimento</button>
+                <button type="button" class="segment-btn" data-type="transfer">Giroconto</button>
               </div>
             </div>
 
@@ -254,7 +285,7 @@ export class MovimentiView {
               <input type="date" id="form-date" class="apple-input" required />
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="form-group-category">
               <label class="form-label" for="form-category">Categoria</label>
               <div class="apple-select-wrapper form-select-wrapper">
                 <select id="form-category" class="apple-select apple-input" required>
@@ -266,9 +297,19 @@ export class MovimentiView {
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="form-account">Conto Origine</label>
+              <label class="form-label" for="form-account" id="form-account-label">Conto di Addebito</label>
               <div class="apple-select-wrapper form-select-wrapper">
                 <select id="form-account" class="apple-select apple-input" required>
+                  ${accounts.map(a => `<option value="${a.name}">${a.name} (${this.formatCurrency(a.balance)})</option>`).join('')}
+                </select>
+                <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+
+            <div class="form-group" id="form-group-to-account" style="display: none;">
+              <label class="form-label" for="form-to-account">Conto di Accredito (Destinazione)</label>
+              <div class="apple-select-wrapper form-select-wrapper">
+                <select id="form-to-account" class="apple-select apple-input">
                   ${accounts.map(a => `<option value="${a.name}">${a.name} (${this.formatCurrency(a.balance)})</option>`).join('')}
                 </select>
                 <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -290,22 +331,50 @@ export class MovimentiView {
     if (saveBtn) saveBtn.addEventListener('click', (e) => { e.preventDefault(); this.handleSave(container); });
 
     const typeToggle = document.getElementById('form-type-toggle');
+    const toAccGroup = document.getElementById('form-group-to-account');
+    const accLabel = document.getElementById('form-account-label');
+
     if (typeToggle) {
       typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           typeToggle.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
           e.currentTarget.classList.add('active');
+          const currentType = e.currentTarget.dataset.type;
+
+          if (toAccGroup) {
+            toAccGroup.style.display = currentType === 'transfer' ? 'block' : 'none';
+          }
+          if (accLabel) {
+            accLabel.textContent = currentType === 'transfer' ? 'Conto Origine' : (currentType === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+          }
         });
       });
     }
+
+    // Supporto ESC da tastiera
+    if (this._escHandler) {
+      window.removeEventListener('keydown', this._escHandler);
+    }
+    this._escHandler = (e) => {
+      if (e.key === 'Escape' && this.modalOpen) {
+        this.closeModal();
+      }
+    };
+    window.addEventListener('keydown', this._escHandler);
   }
 
   bindEvents(container) {
     const searchInput = document.getElementById('mov-search');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
+        const pos = e.target.selectionStart || e.target.value.length;
         this.filters.search = e.target.value;
         this.render(container);
+        const newSearchInput = document.getElementById('mov-search');
+        if (newSearchInput) {
+          newSearchInput.focus();
+          try { newSearchInput.setSelectionRange(pos, pos); } catch (err) {}
+        }
       });
     }
 
@@ -369,7 +438,7 @@ export class MovimentiView {
     setTimeout(() => {
       const amountInput = document.getElementById('form-amount');
       if (amountInput) amountInput.focus();
-    }, 300);
+    }, 280);
   }
 
   closeModal() {
@@ -379,7 +448,7 @@ export class MovimentiView {
     if (sheet) sheet.classList.remove('open');
     setTimeout(() => {
       if (overlay) overlay.classList.remove('open');
-    }, 280);
+    }, 260);
   }
 
   handleSave(container) {
@@ -388,11 +457,12 @@ export class MovimentiView {
     const date = document.getElementById('form-date')?.value;
     const category = document.getElementById('form-category')?.value;
     const account = document.getElementById('form-account')?.value;
+    const toAccount = document.getElementById('form-to-account')?.value;
 
     const activeTypeBtn = document.querySelector('#form-type-toggle .segment-btn.active');
     const type = activeTypeBtn ? activeTypeBtn.dataset.type : 'expense';
 
-    if (!amount || !description || !date || !category || !account) {
+    if (!amount || !description || !date || (!category && type !== 'transfer') || !account) {
       const saveBtn = document.getElementById('modal-save');
       if (saveBtn) {
         saveBtn.classList.add('shake');
@@ -401,14 +471,22 @@ export class MovimentiView {
       return;
     }
 
-    const addedTx = financeStore.addTransaction({ amount, description, date, category, type, account });
+    const addedTx = financeStore.addTransaction({
+      amount,
+      description,
+      date,
+      category: category || '🔄 Giroconto',
+      type,
+      account,
+      toAccount: type === 'transfer' ? toAccount : ''
+    });
 
     if (googleSheetsService.isConfigured()) {
       googleSheetsService.pushTransaction(addedTx).catch(err => console.warn('Sync fallita:', err));
     }
 
     this.closeModal();
-    setTimeout(() => this.render(container), 300);
+    setTimeout(() => this.render(container), 280);
   }
 
   handleDelete(id, rowNumber, container) {

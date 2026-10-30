@@ -184,6 +184,8 @@ class AppController {
     const container = document.getElementById('main-viewport');
     if (!container) return;
 
+    container.scrollTop = 0;
+
     this.dashboardView.destroyCharts();
     this.investimentiView.destroyCharts();
     this.storicoView.destroyCharts();

@@ -81,14 +81,19 @@ class FinanceStore {
 
   addAccount(account) {
     const id = 'acc_' + Date.now();
+    const typeStr = (account.type || '').toLowerCase();
+    const isPension = typeStr.includes('pension') || typeStr.includes('previden');
+    const isInvestment = typeStr.includes('invest') || typeStr.includes('sicurezza') || typeStr.includes('etf') || typeStr.includes('monetari') || typeStr.includes('xeon') || typeStr.includes('vwce');
+    const isLiquid = !isPension && !isInvestment;
+
     const newAcc = {
       id,
       name: account.name.trim(),
       type: account.type || 'Liquidità corrente',
       balance: parseFloat(account.balance) || 0,
-      isLiquid: account.type ? account.type.toLowerCase().includes('liquid') : true,
-      isInvestment: account.type ? account.type.toLowerCase().includes('invest') || account.type.toLowerCase().includes('sicurezza') : false,
-      isPension: account.type ? account.type.toLowerCase().includes('pension') || account.type.toLowerCase().includes('previden') : false
+      isLiquid,
+      isInvestment,
+      isPension
     };
     this.accounts.push(newAcc);
     this.saveAccounts();
@@ -145,27 +150,68 @@ class FinanceStore {
 
   addTransaction(newTx) {
     const id = 'tx_' + Date.now();
-    const dateStr = newTx.date || new Date().toISOString().split('T')[0];
+    const rawDate = newTx.date || new Date().toISOString().split('T')[0];
+    let formattedDate = rawDate;
+    let year = String(new Date().getFullYear());
+    let month = String(new Date().getMonth() + 1);
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const [y, m, d] = rawDate.split('-');
+      formattedDate = `${d}/${m}/${y}`;
+      year = y;
+      month = String(parseInt(m, 10));
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+      const [d, m, y] = rawDate.split('/');
+      year = y;
+      month = String(parseInt(m, 10));
+    }
+
+    const amount = Math.abs(parseFloat(newTx.amount) || 0);
+    const type = newTx.type || 'expense';
+    const account = newTx.account || 'Buddybank';
+    const toAccount = newTx.toAccount || '';
+
     const tx = {
       id,
-      date: dateStr,
+      year,
+      month,
+      date: formattedDate,
       description: (newTx.description || '').trim(),
-      category: newTx.category || '❔Altro',
-      type: newTx.type || 'expense',
-      amount: parseFloat(newTx.amount) || 0,
-      account: newTx.account || 'Buddybank',
-      toAccount: newTx.toAccount || ''
+      category: newTx.category || (type === 'transfer' ? '🔄 Giroconto' : '❔Altro'),
+      type,
+      amount,
+      account,
+      fromAccount: account,
+      toAccount
     };
+
+    // Aggiorna saldi conti in tempo reale
+    const accObj = this.accounts.find(a => a.name.toLowerCase() === account.toLowerCase());
+    if (accObj) {
+      if (type === 'expense') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
+      else if (type === 'income') accObj.balance = Math.round((accObj.balance + amount) * 100) / 100;
+      else if (type === 'transfer') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
+    }
+    if (type === 'transfer' && toAccount) {
+      const toAccObj = this.accounts.find(a => a.name.toLowerCase() === toAccount.toLowerCase());
+      if (toAccObj) {
+        toAccObj.balance = Math.round((toAccObj.balance + amount) * 100) / 100;
+      }
+    }
+    this.saveAccounts();
+
     this.transactions.unshift(tx);
     this.saveTransactions();
     return tx;
   }
 
   deleteTransaction(id) {
-    const initialLen = this.transactions.length;
+    const target = this.transactions.find(t => t.id === id);
+    if (!target) return false;
+
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.saveTransactions();
-    return this.transactions.length < initialLen;
+    return true;
   }
 
   // === METRICHE DI SINTESI (DASHBOARD & NET WORTH) ===
@@ -177,14 +223,20 @@ class FinanceStore {
 
     this.accounts.forEach(acc => {
       const b = parseFloat(acc.balance) || 0;
-      if (acc.isPension) pensionTotal += b;
-      else if (acc.isInvestment) investedTotal += b;
-      else liquidTotal += b;
+      const nameLower = (acc.name || '').toLowerCase();
+      const typeLower = (acc.type || '').toLowerCase();
+      if (acc.isPension || nameLower.includes('pensione') || typeLower.includes('previden')) {
+        pensionTotal += b;
+      } else if (acc.isInvestment || nameLower.includes('xeon') || nameLower.includes('vwce') || typeLower.includes('etf') || typeLower.includes('monetari') || typeLower.includes('invest') || typeLower.includes('sicurezza')) {
+        investedTotal += b;
+      } else {
+        liquidTotal += b;
+      }
     });
 
     const netWorth = liquidTotal + investedTotal + pensionTotal;
 
-    // Calcolo mese corrente (o ultimo mese tracciato)
+    // Calcolo mese corrente (ottobre 2026 come mese attivo di riferimento da gestionale)
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
@@ -193,17 +245,23 @@ class FinanceStore {
     let monthlyExpense = 0;
 
     this.transactions.forEach(t => {
-      let isCurrentMonth = false;
-      if (t.month && t.year) {
-        isCurrentMonth = (parseInt(t.month, 10) === curMonth || parseInt(t.month, 10) === 10) && (parseInt(t.year, 10) === curYear);
-      } else if (t.date) {
-        const parts = t.date.split(/[-/]/);
-        if (parts.length === 3) {
-          isCurrentMonth = true;
+      let txMonth = parseInt(t.month, 10);
+      let txYear = parseInt(t.year, 10);
+
+      if ((!txMonth || !txYear) && t.date) {
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(t.date)) {
+          const parts = t.date.split('/');
+          txMonth = parseInt(parts[1], 10);
+          txYear = parseInt(parts[2], 10);
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(t.date)) {
+          const parts = t.date.split('-');
+          txYear = parseInt(parts[0], 10);
+          txMonth = parseInt(parts[1], 10);
         }
       }
 
-      if (isCurrentMonth) {
+      const isTargetMonth = (txYear === curYear && (txMonth === curMonth || txMonth === 10));
+      if (isTargetMonth) {
         if (t.type === 'income') monthlyIncome += t.amount;
         else if (t.type === 'expense') monthlyExpense += t.amount;
       }

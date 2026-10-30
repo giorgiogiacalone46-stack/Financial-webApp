@@ -34,12 +34,16 @@ function handleRequest(e, method) {
       }
     }
 
-    var token = params.token || postData.token;
+    var token = (params.token || postData.token || "").toString().trim();
     var action = params.action || postData.action || "getAllData";
+    var expectedToken = (SECURITY_TOKEN || "").toString().trim();
 
-    // Verifica Token di Sicurezza Personale
-    if (SECURITY_TOKEN && SECURITY_TOKEN !== "" && token !== SECURITY_TOKEN) {
-      return createJsonResponse({ status: "error", message: "Accesso negato: Token di sicurezza non valido." }, 403);
+    // Verifica Token di Sicurezza Personale (tollerante a spazi e maiuscole/minuscole)
+    if (expectedToken !== "" && token.toLowerCase() !== expectedToken.toLowerCase()) {
+      return createJsonResponse({ 
+        status: "error", 
+        message: "Accesso negato: Token di sicurezza non corrispondente."
+      }, 403);
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
