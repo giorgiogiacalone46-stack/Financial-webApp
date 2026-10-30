@@ -1,167 +1,182 @@
 /**
- * Apple Design System - Impostazioni (Settings) View Component
- * Configurazione Google Sheets ("Finanze-Movimenti"), Token di Sicurezza Privato e Test di Connessione
+ * Apple Design System - Impostazioni & Configurazione Completa
+ * - Gestione Conti & Saldi Iniziali (Aggiunta, modifica, rimozione)
+ * - Gestione Categorie di Spesa/Entrata (Aggiunta, rimozione)
+ * - Sicurezza: PIN di Accesso Apple a 4 cifre
+ * - Connessione Google Sheets (Web App URL, Security Token)
  */
 
+import { financeStore } from '../data/mockData.js';
 import { googleSheetsService } from '../services/googleSheetsService.js';
 
 export class ImpostazioniView {
-  constructor() {}
+  constructor() {
+    this.activeSubtab = 'conti'; // 'conti' | 'categorie' | 'sicurezza' | 'sheets'
+  }
+
+  formatCurrency(value) {
+    return new Intl.NumberFormat('it-IT', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 2
+    }).format(value || 0);
+  }
 
   render(container) {
     const config = googleSheetsService.getConfig();
+    const accounts = financeStore.getAccounts();
+    const categories = financeStore.getCategories();
+    const isPinActive = financeStore.isPinEnabled();
 
     container.innerHTML = `
-      <div class="settings-layout">
-        
-        <!-- 1. Header Card: Stato e Sicurezza -->
-        <section class="settings-card header-notice">
-          <div class="settings-header-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2.2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-            </svg>
-          </div>
-          <div class="settings-header-text">
-            <h3>Architettura Privata & 100% Gratuita</h3>
-            <p>Questa web app comunica con il tuo foglio personale Google Sheets <strong>"Finanze-Movimenti"</strong> tramite una Web App serverless Google Apps Script. <strong>Nessun costo</strong>, nessun intermediario terzo, e accesso protetto da token segreto.</p>
-          </div>
-        </section>
+      <div class="impostazioni-layout">
 
-        <!-- 2. Configurazione Google Sheets Web App -->
-        <section class="settings-card">
-          <div class="settings-card-header">
-            <div>
-              <h3>Parametri Connessione Google Sheets</h3>
-              <p>Collega la Web App al tuo file "Finanze-Movimenti"</p>
-            </div>
-            <span class="settings-status-pill ${config.isConfigured ? 'connected' : 'pending'}">
-              ${config.isConfigured ? 'Configurato' : 'In attesa URL'}
-            </span>
-          </div>
+        <!-- Sotto-navigazione Cupertino Tabs -->
+        <div class="settings-subtabs-nav">
+          <button class="settings-subtab-btn ${this.activeSubtab === 'conti' ? 'active' : ''}" data-subtab="conti">
+            <span>🏦 Conti & Saldi</span>
+          </button>
+          <button class="settings-subtab-btn ${this.activeSubtab === 'categorie' ? 'active' : ''}" data-subtab="categorie">
+            <span>🏷️ Categorie</span>
+          </button>
+          <button class="settings-subtab-btn ${this.activeSubtab === 'sicurezza' ? 'active' : ''}" data-subtab="sicurezza">
+            <span>🔒 Sicurezza PIN</span>
+          </button>
+          <button class="settings-subtab-btn ${this.activeSubtab === 'sheets' ? 'active' : ''}" data-subtab="sheets">
+            <span>☁️ Google Sheets</span>
+          </button>
+        </div>
 
-          <form class="settings-form" id="sheets-config-form" onsubmit="return false;">
-            
-            <div class="form-group">
-              <label class="form-label" for="settings-gas-url">
-                URL Applicazione Web (Google Apps Script)
-              </label>
-              <input 
-                type="url" 
-                id="settings-gas-url" 
-                class="apple-input" 
-                placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
-                value="${config.webAppUrl}"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <span class="field-hint">Generato dalla voce <em>Distribuisci > Nuova distribuzione > Applicazione web</em> nel tuo foglio Google.</span>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="settings-token">
-                Chiave Segreta Personale (Security Token)
-              </label>
-              <div class="password-input-wrapper">
-                <input 
-                  type="password" 
-                  id="settings-token" 
-                  class="apple-input" 
-                  placeholder="La tua chiave segreta impostata nello script"
-                  value="${config.securityToken}"
-                  autocomplete="off"
-                />
-                <button type="button" class="toggle-pwd-btn" id="toggle-pwd">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
+        <!-- 1. GESTIONE CONTI & SALDI -->
+        ${this.activeSubtab === 'conti' ? `
+          <section class="settings-section-card">
+            <div class="section-card-header">
+              <div>
+                <h3>Gestione Conti & Saldi Iniziali</h3>
+                <span class="card-subtitle">Aggiungi, modifica o aggiorna i saldi dei tuoi conti e asset</span>
               </div>
-              <span class="field-hint">Garantisce che <strong>solo tu</strong> possa inviare o leggere movimenti finanziari.</span>
+              <button class="apple-btn-secondary" id="btn-add-account-modal">+ Nuovo Conto</button>
             </div>
 
-            <div class="settings-toggle-row">
-              <div class="toggle-label-group">
-                <strong>Sincronizzazione Automatica</strong>
-                <span>Invia e riceve i movimenti automaticamente a ogni modifica</span>
+            <div class="accounts-manager-list">
+              ${accounts.map(acc => `
+                <div class="account-manager-row" data-id="${acc.id}">
+                  <div class="acc-row-info">
+                    <span class="acc-name">${acc.name}</span>
+                    <span class="acc-type-pill">${acc.type}</span>
+                  </div>
+                  <div class="acc-row-actions">
+                    <input type="number" step="0.01" class="apple-input acc-balance-input" value="${acc.balance}" data-id="${acc.id}" />
+                    <button class="apple-btn-save-inline" data-id="${acc.id}">Aggiorna</button>
+                    <button class="apple-btn-delete-inline" data-id="${acc.id}" title="Rimuovi">&times;</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </section>
+        ` : ''}
+
+        <!-- 2. GESTIONE CATEGORIE -->
+        ${this.activeSubtab === 'categorie' ? `
+          <section class="settings-section-card">
+            <div class="section-card-header">
+              <div>
+                <h3>Categorie di Spesa & Entrata</h3>
+                <span class="card-subtitle">Aggiungi nuove categorie personalizzate con emoji</span>
               </div>
-              <label class="apple-switch">
-                <input type="checkbox" id="settings-autosync" ${config.autoSync ? 'checked' : ''} />
-                <span class="switch-slider"></span>
-              </label>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="settings-actions">
-              <button type="button" class="apple-btn-secondary" id="btn-test-connection">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                  <polyline points="22,6 12,13 2,6"></polyline>
-                </svg>
+            <!-- Form rapido aggiungi categoria -->
+            <div class="add-cat-bar">
+              <input type="text" id="new-cat-name" class="apple-input" placeholder="Es. ✈️ Viaggi o 🎮 Gaming..." />
+              <select id="new-cat-type" class="apple-select">
+                <option value="expense">Uscita</option>
+                <option value="income">Entrata</option>
+                <option value="transfer">Giroconto/Risparmio</option>
+              </select>
+              <button class="apple-btn-primary" id="btn-create-cat">Aggiungi</button>
+            </div>
+
+            <div class="categories-tag-cloud">
+              ${categories.map(c => `
+                <div class="category-tag-pill" style="border-left: 3px solid ${c.color || '#0071E3'};">
+                  <span>${c.name}</span>
+                  <span class="cat-type-label">(${c.type === 'income' ? 'Entrata' : (c.type === 'transfer' ? 'Risparmio' : 'Spesa')})</span>
+                  <button class="btn-remove-cat" data-id="${c.id}">&times;</button>
+                </div>
+              `).join('')}
+            </div>
+          </section>
+        ` : ''}
+
+        <!-- 3. SICUREZZA PIN APPLE -->
+        ${this.activeSubtab === 'sicurezza' ? `
+          <section class="settings-section-card">
+            <div class="section-card-header">
+              <div>
+                <h3>Protezione con PIN di Sicurezza</h3>
+                <span class="card-subtitle">Blocca l'accesso alla web app su iPhone e Mac se il PIN non viene inserito</span>
+              </div>
+            </div>
+
+            <div class="pin-config-box">
+              <div class="pin-status-banner ${isPinActive ? 'active' : ''}">
+                <div class="pin-status-icon">🔒</div>
+                <div>
+                  <strong>${isPinActive ? 'Protezione PIN Attiva' : 'Nessun PIN Configurato'}</strong>
+                  <p>${isPinActive ? 'All\'apertura della web app viene richiesto il codice di sblocco a 4 cifre.' : 'La web app si apre direttamente senza richiedere codici.'}</p>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 16px;">
+                <label class="form-label">Imposta o Cambia Codice PIN (4 cifre)</label>
+                <div style="display: flex; gap: 10px;">
+                  <input type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" id="input-security-pin" class="apple-input apple-input-lg" placeholder="••••" value="${financeStore.getPin()}" style="max-width: 140px; letter-spacing: 6px; text-align: center; font-size: 20px;" />
+                  <button class="apple-btn-primary" id="btn-save-pin">Salva PIN</button>
+                  ${isPinActive ? `<button class="apple-btn-secondary" id="btn-remove-pin">Rimuovi PIN</button>` : ''}
+                </div>
+              </div>
+            </div>
+          </section>
+        ` : ''}
+
+        <!-- 4. GOOGLE SHEETS SYNC -->
+        ${this.activeSubtab === 'sheets' ? `
+          <section class="settings-section-card">
+            <div class="section-card-header">
+              <div>
+                <h3>Connessione Google Sheets Privata</h3>
+                <span class="card-subtitle">Parametri Web App per il foglio 'Finanze - Movimenti'</span>
+              </div>
+              <span class="sheet-status-badge">
+                <span class="sheet-status-indicator" style="width: 8px; height: 8px;"></span>
+                <span class="sheet-status-desc">${config.isConfigured ? 'Connesso' : 'Pronto (Locale)'}</span>
+              </span>
+            </div>
+
+            <div class="settings-form-group">
+              <label class="settings-label" for="gas-url-input">URL Applicazione Web (Google Apps Script)</label>
+              <input type="url" id="gas-url-input" class="apple-input apple-input-mono" placeholder="https://script.google.com/macros/s/AKfyc.../exec" value="${config.webAppUrl || ''}" />
+            </div>
+
+            <div class="settings-form-group">
+              <label class="settings-label" for="gas-token-input">Chiave Segreta Personale (Security Token)</label>
+              <input type="password" id="gas-token-input" class="apple-input" placeholder="La tua password segreta impostata nello script" value="${config.securityToken || ''}" />
+            </div>
+
+            <div class="settings-actions-row">
+              <button class="apple-btn-secondary" id="btn-test-connection">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                 <span>Verifica Connessione</span>
               </button>
-
-              <button type="button" class="apple-btn-primary" id="btn-save-settings">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
+              <button class="apple-btn-primary" id="btn-save-sheets-config">
                 <span>Salva Impostazioni</span>
               </button>
             </div>
 
-            <!-- Feedback Message Banner -->
-            <div class="settings-feedback-banner" id="settings-feedback" style="display: none;"></div>
-
-          </form>
-        </section>
-
-        <!-- 3. Guida Rapida: Come installare lo script nel tuo Google Sheets -->
-        <section class="settings-card">
-          <div class="settings-card-header">
-            <div>
-              <h3>Guida di Installazione nel Foglio "Finanze-Movimenti"</h3>
-              <p>Procedura guidata in 4 semplici passaggi gratuiti</p>
-            </div>
-            <button class="apple-btn-secondary" id="btn-copy-code" style="padding: 6px 14px; font-size: 12px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              <span>Copia Codice Script</span>
-            </button>
-          </div>
-
-          <div class="guide-steps-list">
-            <div class="guide-step-item">
-              <span class="step-num">1</span>
-              <div>
-                <strong>Apri il tuo foglio Google Sheets "Finanze-Movimenti"</strong>
-                <p>Vai su <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a> e apri il foglio di riferimento.</p>
-              </div>
-            </div>
-
-            <div class="guide-step-item">
-              <span class="step-num">2</span>
-              <div>
-                <strong>Apri l'editor di script</strong>
-                <p>Nella barra dei menu del foglio clicca su <strong>Estensioni &gt; Apps Script</strong>.</p>
-              </div>
-            </div>
-
-            <div class="guide-step-item">
-              <span class="step-num">3</span>
-              <div>
-                <strong>Incolla il codice preparato</strong>
-                <p>Cancella il codice predefinito, incolla lo script copiato con il pulsante in alto e personalizza il tuo <code>SECURITY_TOKEN</code>.</p>
-              </div>
-            </div>
-
-            <div class="guide-step-item">
-              <span class="step-num">4</span>
-              <div>
-                <strong>Distribuisci come Web App</strong>
-                <p>Clicca su <strong>Esegui distribuzione &gt; Nuova distribuzione</strong>, scegli <em>Applicazione web</em>, imposta <em>Esegui come: Io</em>, <em>Chi ha accesso: Chiunque</em> e incolla l'URL generato nel campo sopra!</p>
-              </div>
-            </div>
-          </div>
-        </section>
+            <div id="connection-test-feedback" class="connection-feedback" style="display: none;"></div>
+          </section>
+        ` : ''}
 
       </div>
     `;
@@ -170,93 +185,111 @@ export class ImpostazioniView {
   }
 
   bindEvents(container) {
-    // Toggle Password visibility
-    const pwdInput = document.getElementById('settings-token');
-    const togglePwdBtn = document.getElementById('toggle-pwd');
-    if (togglePwdBtn && pwdInput) {
-      togglePwdBtn.addEventListener('click', () => {
-        const isPassword = pwdInput.type === 'password';
-        pwdInput.type = isPassword ? 'text' : 'password';
+    // Sotto-navigazione Tabs
+    container.querySelectorAll('.settings-subtab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        this.activeSubtab = e.currentTarget.dataset.subtab;
+        this.render(container);
+      });
+    });
+
+    // Aggiornamento Saldo Conto
+    container.querySelectorAll('.apple-btn-save-inline').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        const input = container.querySelector(`.acc-balance-input[data-id="${id}"]`);
+        if (input) {
+          const newBal = parseFloat(input.value) || 0;
+          financeStore.updateAccountBalance(id, newBal);
+          btn.textContent = '✓ Salvato';
+          setTimeout(() => { btn.textContent = 'Aggiorna'; }, 1500);
+        }
+      });
+    });
+
+    // Eliminazione Conto
+    container.querySelectorAll('.apple-btn-delete-inline').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        if (confirm('Sei sicuro di voler rimuovere questo conto?')) {
+          financeStore.deleteAccount(id);
+          this.render(container);
+        }
+      });
+    });
+
+    // Creazione Categoria
+    const btnCreateCat = document.getElementById('btn-create-cat');
+    if (btnCreateCat) {
+      btnCreateCat.addEventListener('click', () => {
+        const nameInput = document.getElementById('new-cat-name');
+        const typeSelect = document.getElementById('new-cat-type');
+        if (nameInput && nameInput.value.trim()) {
+          financeStore.addCategory({ name: nameInput.value, type: typeSelect.value });
+          this.render(container);
+        }
       });
     }
 
-    // Save Settings
-    const saveBtn = document.getElementById('btn-save-settings');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', () => {
-        const url = document.getElementById('settings-gas-url')?.value || '';
-        const token = document.getElementById('settings-token')?.value || '';
-        const autoSync = document.getElementById('settings-autosync')?.checked;
-
-        googleSheetsService.saveConfig(url, token, autoSync);
-        this.showFeedback('Impostazioni salvate con successo!', 'success');
+    // Rimozione Categoria
+    container.querySelectorAll('.btn-remove-cat').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        financeStore.deleteCategory(id);
+        this.render(container);
       });
-    }
+    });
 
-    // Test Connection
-    const testBtn = document.getElementById('btn-test-connection');
-    if (testBtn) {
-      testBtn.addEventListener('click', async () => {
-        const url = document.getElementById('settings-gas-url')?.value || '';
-        const token = document.getElementById('settings-token')?.value || '';
-        
-        // Salva momentaneamente prima del test
-        googleSheetsService.saveConfig(url, token, true);
-
-        testBtn.disabled = true;
-        testBtn.innerHTML = `<span>Verifica in corso...</span>`;
-
-        const result = await googleSheetsService.testConnection();
-
-        testBtn.disabled = false;
-        testBtn.innerHTML = `
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-            <polyline points="22,6 12,13 2,6"></polyline>
-          </svg>
-          <span>Verifica Connessione</span>
-        `;
-
-        if (result.success) {
-          this.showFeedback(result.message, 'success');
+    // Salva / Rimuovi PIN
+    const btnSavePin = document.getElementById('btn-save-pin');
+    if (btnSavePin) {
+      btnSavePin.addEventListener('click', () => {
+        const pinVal = document.getElementById('input-security-pin')?.value.trim();
+        if (pinVal && pinVal.length === 4) {
+          financeStore.setPin(pinVal);
+          alert('PIN di sicurezza a 4 cifre attivato con successo!');
+          this.render(container);
         } else {
-          this.showFeedback(result.message, 'error');
+          alert('Inserisci un codice numerico di 4 cifre.');
         }
       });
     }
 
-    // Copy Apps Script Code button
-    const copyBtn = document.getElementById('btn-copy-code');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', async () => {
-        try {
-          const res = await fetch('google-apps-script/Code.gs');
-          const code = await res.text();
-          await navigator.clipboard.writeText(code);
-          copyBtn.innerHTML = `<span>✓ Codice Copiato!</span>`;
-          setTimeout(() => {
-            copyBtn.innerHTML = `
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              <span>Copia Codice Script</span>
-            `;
-          }, 2500);
-        } catch (err) {
-          this.showFeedback('File Code.gs disponibile nella cartella google-apps-script/ del progetto.', 'info');
+    const btnRemovePin = document.getElementById('btn-remove-pin');
+    if (btnRemovePin) {
+      btnRemovePin.addEventListener('click', () => {
+        if (confirm('Disattivare la protezione con PIN?')) {
+          financeStore.setPin('');
+          this.render(container);
         }
       });
     }
-  }
 
-  showFeedback(message, type) {
-    const banner = document.getElementById('settings-feedback');
-    if (!banner) return;
+    // Sheets Config
+    const btnSaveSheets = document.getElementById('btn-save-sheets-config');
+    if (btnSaveSheets) {
+      btnSaveSheets.addEventListener('click', () => {
+        const url = document.getElementById('gas-url-input')?.value || '';
+        const token = document.getElementById('gas-token-input')?.value || '';
+        googleSheetsService.saveConfig(url, token, true);
+        alert('Parametri salvati con successo!');
+        this.render(container);
+      });
+    }
 
-    banner.className = `settings-feedback-banner ${type}`;
-    banner.textContent = message;
-    banner.style.display = 'block';
+    const btnTest = document.getElementById('btn-test-connection');
+    if (btnTest) {
+      btnTest.addEventListener('click', async () => {
+        const feedbackEl = document.getElementById('connection-test-feedback');
+        if (!feedbackEl) return;
+        feedbackEl.style.display = 'block';
+        feedbackEl.className = 'connection-feedback loading';
+        feedbackEl.textContent = 'Verifica connessione con Google Sheets in corso...';
 
-    setTimeout(() => {
-      if (banner) banner.style.display = 'none';
-    }, 6000);
+        const res = await googleSheetsService.testConnection();
+        feedbackEl.className = `connection-feedback ${res.success ? 'success' : 'error'}`;
+        feedbackEl.textContent = res.message;
+      });
+    }
   }
 }

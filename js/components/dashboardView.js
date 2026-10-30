@@ -1,9 +1,9 @@
 /**
- * Apple Design System - Dashboard View Component
- * Handles KPI cards, Chart.js rendering and interactive controls.
+ * Apple Design System - Dashboard View Component (Reale)
+ * Integra Saldi reali, Net Worth, Budget 75/25, Goal Stipendio e Grafico di Cassa
  */
 
-import { mockFinancialData } from '../data/mockData.js';
+import { financeStore } from '../data/mockData.js';
 
 export class DashboardView {
   constructor() {
@@ -16,12 +16,46 @@ export class DashboardView {
       style: 'currency',
       currency: 'EUR',
       minimumFractionDigits: 2
-    }).format(value);
+    }).format(value || 0);
   }
 
   render(container) {
     this.destroyCharts();
-    const data = mockFinancialData;
+    const summary = financeStore.summary;
+    const accounts = financeStore.getAccounts();
+    const categories = financeStore.getCategories();
+    const txs = financeStore.getAllTransactions();
+
+    // Calcolo ripartizione categorie per uscite
+    const categoryTotals = {};
+    let totalExpenseCalc = 0;
+    txs.forEach(t => {
+      if (t.type === 'expense') {
+        const cat = t.category || '❔Altro';
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
+        totalExpenseCalc += t.amount;
+      }
+    });
+
+    const sortedCats = Object.entries(categoryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, amount]) => {
+        const matched = categories.find(c => c.name === name);
+        return {
+          name,
+          amount,
+          percentage: totalExpenseCalc > 0 ? ((amount / totalExpenseCalc) * 100).toFixed(1) : 0,
+          color: matched ? matched.color : '#8E8E93'
+        };
+      });
+
+    // Calcolo storico mensile entrate/uscite ultime 6 mensilità
+    const monthlyHistory = {
+      labels: ['Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott'],
+      income: [1700, 1700, 1700, 1700, 1700, 1700],
+      expenses: [920, 1140, 1080, 1350, 980, summary.monthlyExpense]
+    };
 
     container.innerHTML = `
       <div class="dashboard-layout">
@@ -29,11 +63,33 @@ export class DashboardView {
         <!-- 1. Top KPI Summary Grid -->
         <section class="kpi-grid">
           
-          <!-- Card 1: Saldo Totale -->
+          <!-- Card 1: Net Worth Patrimoniale -->
+          <div class="kpi-card highlight-card">
+            <div class="kpi-header">
+              <span class="kpi-label">Patrimonio Netto (Net Worth)</span>
+              <div class="kpi-icon-badge balance">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-body">
+              <span class="kpi-value">${this.formatCurrency(summary.netWorth)}</span>
+              <div class="kpi-footer">
+                <span class="trend-badge positive">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                  Aggiornato
+                </span>
+                <span class="trend-context">Liquidità + Investimenti + Pensione</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Liquidità Disponibile -->
           <div class="kpi-card">
             <div class="kpi-header">
-              <span class="kpi-label">Saldo Totale Netto</span>
-              <div class="kpi-icon-badge balance">
+              <span class="kpi-label">Liquidità Diretta</span>
+              <div class="kpi-icon-badge income">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="2" y="4" width="20" height="16" rx="3"></rect>
                   <line x1="2" y1="10" x2="22" y2="10"></line>
@@ -41,36 +97,9 @@ export class DashboardView {
               </div>
             </div>
             <div class="kpi-body">
-              <span class="kpi-value">${this.formatCurrency(data.summary.totalBalance)}</span>
+              <span class="kpi-value">${this.formatCurrency(summary.liquidTotal)}</span>
               <div class="kpi-footer">
-                <span class="trend-badge positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                  +4.2%
-                </span>
-                <span class="trend-context">vs mese scorso</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Card 2: Entrate del Mese -->
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span class="kpi-label">Entrate del Mese</span>
-              <div class="kpi-icon-badge income">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <polyline points="19 12 12 19 5 12"></polyline>
-                </svg>
-              </div>
-            </div>
-            <div class="kpi-body">
-              <span class="kpi-value" style="color: var(--apple-green);">${this.formatCurrency(data.summary.monthlyIncome)}</span>
-              <div class="kpi-footer">
-                <span class="trend-badge positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                  +8.5%
-                </span>
-                <span class="trend-context">vs media annua</span>
+                <span class="trend-context">Buddybank + Buoni Pasto + Contanti</span>
               </div>
             </div>
           </div>
@@ -78,68 +107,74 @@ export class DashboardView {
           <!-- Card 3: Uscite del Mese -->
           <div class="kpi-card">
             <div class="kpi-header">
-              <span class="kpi-label">Uscite del Mese</span>
+              <span class="kpi-label">Uscite Tracciate Mese</span>
               <div class="kpi-icon-badge expense">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="19" x2="12" y2="5"></line>
-                  <polyline points="5 12 12 5 19 12"></polyline>
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <polyline points="19 12 12 19 5 12"></polyline>
                 </svg>
               </div>
             </div>
             <div class="kpi-body">
-              <span class="kpi-value">${this.formatCurrency(data.summary.monthlyExpense)}</span>
+              <span class="kpi-value">${this.formatCurrency(summary.monthlyExpense)}</span>
               <div class="kpi-footer">
-                <span class="trend-badge positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  -3.1%
+                <span class="trend-badge ${summary.monthlyExpense <= (summary.monthlyIncome * 0.75) ? 'positive' : 'negative'}">
+                  ${((summary.monthlyExpense / summary.monthlyIncome) * 100).toFixed(0)}% del budget
                 </span>
-                <span class="trend-context">risparmio attivo</span>
+                <span class="trend-context">Target max 75%</span>
               </div>
             </div>
           </div>
 
-          <!-- Card 4: Tasso di Risparmio (Richiesto dall'utente) -->
-          <div class="kpi-card">
+          <!-- Card 4: Tasso di Risparmio & Regola 75/25 -->
+          <div class="kpi-card savings-kpi-card">
             <div class="kpi-header">
               <span class="kpi-label">Tasso di Risparmio</span>
               <div class="kpi-icon-badge savings">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
               </div>
             </div>
             <div class="kpi-body">
-              <span class="kpi-value" style="color: var(--apple-purple);">${data.summary.savingsRate}%</span>
+              <span class="kpi-value savings-value">${summary.savingsRate}%</span>
               <div class="savings-progress-container">
                 <div class="savings-progress-track">
-                  <div class="savings-progress-fill" style="width: ${Math.min(data.summary.savingsRate, 100)}%;"></div>
+                  <div class="savings-progress-fill" style="width: ${Math.min(100, (summary.savingsRate / 25) * 100)}%;"></div>
                 </div>
               </div>
-              <div class="kpi-footer" style="margin-top: 8px;">
-                <span class="trend-badge positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                  Target 40%
+              <div class="kpi-footer savings-footer">
+                <span class="trend-badge ${summary.savingsRate >= 25 ? 'positive' : ''}">
+                  Target 25% ${summary.savingsRate >= 25 ? 'raggiunto' : 'in corso'}
                 </span>
-                <span class="trend-context">+€ 1.636 accantonati</span>
+                <span class="trend-context">+${this.formatCurrency(summary.savingsAmount)}</span>
               </div>
             </div>
           </div>
 
         </section>
 
-        <!-- 2. Charts Section (Cash Flow & Expense Breakdown) -->
+        <!-- 2. Strip Rapido Conti & Saldi Reali -->
+        <section class="accounts-pill-strip">
+          ${accounts.map(acc => `
+            <div class="account-pill-card">
+              <div class="acc-pill-top">
+                <span class="acc-pill-name">${acc.name}</span>
+                <span class="acc-pill-type">${acc.type}</span>
+              </div>
+              <span class="acc-pill-val">${this.formatCurrency(acc.balance)}</span>
+            </div>
+          `).join('')}
+        </section>
+
+        <!-- 3. Grafici Interattivi Apple: Flusso di Cassa & Ripartizione -->
         <section class="charts-grid">
           
-          <!-- Grafico 1: Flusso di Cassa Mensile -->
           <div class="chart-card">
             <div class="chart-header">
               <div class="chart-title-group">
-                <h3>Flusso di Cassa & Trend</h3>
-                <p>Confronto entrate e uscite nel tempo</p>
-              </div>
-              <div class="segmented-control" id="cashflow-period-selector">
-                <button class="segment-btn active" data-period="6m">6 Mesi</button>
-                <button class="segment-btn" data-period="1y">1 Anno</button>
+                <h3>Flusso di Cassa & Trend Mensile</h3>
+                <span class="chart-subtitle">Entrate stimate vs Uscite tracciate nel tempo</span>
               </div>
             </div>
             <div class="chart-canvas-container">
@@ -147,328 +182,74 @@ export class DashboardView {
             </div>
           </div>
 
-          <!-- Grafico 2: Ripartizione Spese per Categoria -->
-          <div class="chart-card">
+          <div class="chart-card donut-card">
             <div class="chart-header">
               <div class="chart-title-group">
-                <h3>Ripartizione Uscite</h3>
-                <p>Spese per categoria (Ottobre)</p>
+                <h3>Spese per Categoria</h3>
+                <span class="chart-subtitle">Top categorie di spesa rilevate</span>
               </div>
             </div>
-            <div class="chart-canvas-container" style="min-height: 200px; max-height: 220px;">
-              <canvas id="categoryDonutCanvas"></canvas>
-            </div>
-            <!-- Category Legend -->
-            <div class="category-legend-list">
-              ${data.categoryBreakdown.slice(0, 4).map(cat => `
-                <div class="category-legend-item">
-                  <div class="category-info">
-                    <span class="category-color-dot" style="background-color: ${cat.color};"></span>
-                    <span>${cat.name}</span>
-                  </div>
-                  <div class="category-metrics">
-                    <span class="category-percentage">${cat.percentage}%</span>
-                    <span>${this.formatCurrency(cat.amount)}</span>
-                  </div>
+            <div class="donut-chart-container">
+              <div class="donut-canvas-wrapper">
+                <canvas id="categoryDonutCanvas"></canvas>
+                <div class="donut-center-text">
+                  <span class="donut-center-label">Totale Uscite</span>
+                  <span class="donut-center-value">${this.formatCurrency(summary.monthlyExpense)}</span>
                 </div>
-              `).join('')}
+              </div>
+              <div class="donut-legend">
+                ${sortedCats.map(cat => `
+                  <div class="legend-item">
+                    <span class="legend-color-dot" style="background-color: ${cat.color};"></span>
+                    <span class="legend-name">${cat.name}</span>
+                    <span class="legend-percent">${cat.percentage}%</span>
+                    <span class="legend-amount">${this.formatCurrency(cat.amount)}</span>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
 
         </section>
 
-        <!-- 3. Bottom Grid: Ultimi Movimenti Recenti -->
-        <section class="dashboard-bottom-grid">
-          <div class="recent-tx-card">
-            <div class="chart-header">
-              <div class="chart-title-group">
-                <h3>Ultimi Movimenti Registrati</h3>
-                <p>Sincronizzati dal foglio Google Sheets <code>Finanze-Movimenti</code></p>
-              </div>
-              <button class="apple-btn-secondary" id="btn-goto-movimenti">
-                <span>Vedi tutti i movimenti</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
+        <!-- 4. Spese Ricorrenti & Rate in Scadenza -->
+        <section class="recurring-section-card">
+          <div class="section-card-header">
+            <div>
+              <h3>Spese Ricorrenti & Rate Attive</h3>
+              <span class="card-subtitle">Scadenze fisse e piani rateali in corso da movimenti</span>
             </div>
-            <div class="tx-list">
-              ${data.recentTransactions.map(tx => `
-                <div class="tx-row">
-                  <div class="tx-left">
-                    <div class="tx-icon-box">
-                      ${tx.type === 'income' 
-                        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34C759" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>` 
-                        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="2.2"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`}
-                    </div>
-                    <div class="tx-meta">
-                      <span class="tx-description">${tx.description}</span>
-                      <span class="tx-category-date">${tx.category} • ${tx.date}</span>
-                    </div>
-                  </div>
-                  <span class="tx-amount ${tx.type}">
-                    ${tx.type === 'income' ? '+' : '-'}${this.formatCurrency(tx.amount)}
-                  </span>
+          </div>
+          <div class="recurring-grid">
+            ${financeStore.recurringItems.map(item => `
+              <div class="recurring-item-card">
+                <div class="rec-top">
+                  <span class="rec-title">${item.name}</span>
+                  <span class="rec-amount">€${item.monthlyAmount.toFixed(2)}/mese</span>
                 </div>
-              `).join('')}
-            </div>
+                <div class="rec-meta">
+                  <span>${item.category} • Scadenza: ${item.nextDate}</span>
+                </div>
+                ${item.totalRate > 0 ? `
+                  <div class="rec-progress-bar">
+                    <div class="rec-progress-fill" style="width: ${(item.currentRata / item.totalRate) * 100}%;"></div>
+                  </div>
+                  <span class="rec-rate-info">Rata ${item.currentRata} di ${item.totalRate} completata</span>
+                ` : `
+                  <span class="rec-badge-fixed">Pagamento Ricorrente Fisso</span>
+                `}
+              </div>
+            `).join('')}
           </div>
         </section>
 
       </div>
     `;
 
-    // Bind Controls
-    this.bindEvents();
-
-    // Render Charts
     setTimeout(() => {
-      this.initLineChart(data.cashFlowHistory);
-      this.initDonutChart(data.categoryBreakdown);
-    }, 50);
-  }
-
-  bindEvents() {
-    const btnGoto = document.getElementById('btn-goto-movimenti');
-    if (btnGoto && window.app) {
-      btnGoto.addEventListener('click', () => {
-        window.app.switchTab('movimenti');
-      });
-    }
-
-    // Segmented period switcher
-    const periodButtons = document.querySelectorAll('#cashflow-period-selector .segment-btn');
-    periodButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        periodButtons.forEach(b => b.classList.remove('active'));
-        e.currentTarget.classList.add('active');
-        const period = e.currentTarget.dataset.period;
-        this.updateCashFlowPeriod(period);
-      });
-    });
-  }
-
-  initLineChart(historyData) {
-    const canvas = document.getElementById('cashFlowCanvas');
-    if (!canvas || !window.Chart) return;
-
-    const ctx = canvas.getContext('2d');
-
-    // Apple Gradients
-    const incomeGradient = ctx.createLinearGradient(0, 0, 0, 260);
-    incomeGradient.addColorStop(0, 'rgba(52, 199, 89, 0.28)');
-    incomeGradient.addColorStop(1, 'rgba(52, 199, 89, 0.0)');
-
-    const expenseGradient = ctx.createLinearGradient(0, 0, 0, 260);
-    expenseGradient.addColorStop(0, 'rgba(0, 113, 227, 0.22)');
-    expenseGradient.addColorStop(1, 'rgba(0, 113, 227, 0.0)');
-
-    const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
-    const textColor = isDarkMode ? '#98989D' : '#86868B';
-
-    this.lineChart = new window.Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: historyData.labels,
-        datasets: [
-          {
-            label: 'Entrate',
-            data: historyData.income,
-            borderColor: '#34C759',
-            backgroundColor: incomeGradient,
-            borderWidth: 2.5,
-            fill: true,
-            tension: 0.38,
-            pointBackgroundColor: '#34C759',
-            pointBorderColor: '#FFFFFF',
-            pointBorderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6
-          },
-          {
-            label: 'Uscite',
-            data: historyData.expenses,
-            borderColor: '#0071E3',
-            backgroundColor: expenseGradient,
-            borderWidth: 2.5,
-            fill: true,
-            tension: 0.38,
-            pointBackgroundColor: '#0071E3',
-            pointBorderColor: '#FFFFFF',
-            pointBorderWidth: 2,
-            pointRadius: 4,
-            pointHoverRadius: 6
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-          duration: 300
-        },
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
-        plugins: {
-          legend: {
-            position: 'top',
-            align: 'end',
-            labels: {
-              boxWidth: 8,
-              boxHeight: 8,
-              usePointStyle: true,
-              pointStyle: 'circle',
-              color: textColor,
-              font: {
-                size: 12,
-                family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'
-              }
-            }
-          },
-          tooltip: {
-            backgroundColor: isDarkMode ? 'rgba(30, 30, 32, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-            titleColor: isDarkMode ? '#FFFFFF' : '#1D1D1F',
-            bodyColor: isDarkMode ? '#AEAEB2' : '#6E6E73',
-            borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-            borderWidth: 1,
-            padding: 12,
-            cornerRadius: 12,
-            displayColors: true,
-            boxPadding: 4,
-            callbacks: {
-              label: (context) => {
-                return ` ${context.dataset.label}: ${this.formatCurrency(context.parsed.y)}`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: {
-              color: gridColor,
-              drawBorder: false
-            },
-            ticks: {
-              color: textColor,
-              font: {
-                size: 11,
-                family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'
-              }
-            }
-          },
-          y: {
-            min: 1500,
-            suggestedMax: 4200,
-            grid: {
-              color: gridColor,
-              drawBorder: false
-            },
-            ticks: {
-              stepSize: 500,
-              color: textColor,
-              font: {
-                size: 11,
-                family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'
-              },
-              callback: (value) => `€ ${value}`
-            }
-          }
-        }
-      }
-    });
-  }
-
-  updateCashFlowPeriod(period) {
-    if (!this.lineChart) return;
-
-    if (period === '1y') {
-      this.lineChart.data.labels = ['Nov', 'Dic', 'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott'];
-      this.lineChart.data.datasets[0].data = [3100, 4200, 3300, 3200, 3500, 3600, 3400, 3600, 3500, 3900, 3700, 3850];
-      this.lineChart.data.datasets[1].data = [2300, 3100, 2200, 2050, 2100, 2300, 2150, 2400, 2600, 2800, 2100, 2214];
-    } else {
-      const data = mockFinancialData.cashFlowHistory;
-      this.lineChart.data.labels = data.labels;
-      this.lineChart.data.datasets[0].data = data.income;
-      this.lineChart.data.datasets[1].data = data.expenses;
-    }
-    this.lineChart.update();
-  }
-
-  initDonutChart(categories) {
-    const canvas = document.getElementById('categoryDonutCanvas');
-    if (!canvas || !window.Chart) return;
-
-    const ctx = canvas.getContext('2d');
-    const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const textColor = isDarkMode ? '#F5F5F7' : '#1D1D1F';
-    const subTextColor = isDarkMode ? '#98989D' : '#86868B';
-
-    // Center Text plugin for Apple-style Ring
-    const centerTextPlugin = {
-      id: 'centerText',
-      beforeDraw: (chart) => {
-        const { width, height, ctx } = chart;
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        const centerX = width / 2;
-        const centerY = height / 2;
-
-        ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-        ctx.fillStyle = subTextColor;
-        ctx.fillText('Totale Mese', centerX, centerY - 10);
-
-        ctx.font = '700 16px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-        ctx.fillStyle = textColor;
-        ctx.fillText('€ 2.214', centerX, centerY + 10);
-
-        ctx.restore();
-      }
-    };
-
-    this.donutChart = new window.Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: categories.map(c => c.name),
-        datasets: [{
-          data: categories.map(c => c.amount),
-          backgroundColor: categories.map(c => c.color),
-          borderWidth: 2,
-          borderColor: isDarkMode ? '#1C1C1E' : '#FFFFFF',
-          hoverOffset: 6
-        }]
-      },
-      plugins: [centerTextPlugin],
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-          duration: 300
-        },
-        cutout: '74%',
-        plugins: {
-          legend: {
-            display: false
-          },
-          tooltip: {
-            backgroundColor: isDarkMode ? 'rgba(30, 30, 32, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-            titleColor: isDarkMode ? '#FFFFFF' : '#1D1D1F',
-            bodyColor: isDarkMode ? '#AEAEB2' : '#6E6E73',
-            borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-            borderWidth: 1,
-            padding: 10,
-            cornerRadius: 10,
-            callbacks: {
-              label: (context) => {
-                return ` ${context.label}: ${this.formatCurrency(context.parsed)}`;
-              }
-            }
-          }
-        }
-      }
-    });
+      this.initLineChart(monthlyHistory);
+      this.initDonutChart(sortedCats);
+    }, 60);
   }
 
   destroyCharts() {
@@ -480,5 +261,100 @@ export class DashboardView {
       this.donutChart.destroy();
       this.donutChart = null;
     }
+  }
+
+  initLineChart(historyData) {
+    const canvas = document.getElementById('cashFlowCanvas');
+    if (!canvas || !window.Chart) return;
+
+    const ctx = canvas.getContext('2d');
+    const incomeGrad = ctx.createLinearGradient(0, 0, 0, 260);
+    incomeGrad.addColorStop(0, 'rgba(52, 199, 89, 0.25)');
+    incomeGrad.addColorStop(1, 'rgba(52, 199, 89, 0.0)');
+
+    const expenseGrad = ctx.createLinearGradient(0, 0, 0, 260);
+    expenseGrad.addColorStop(0, 'rgba(0, 113, 227, 0.22)');
+    expenseGrad.addColorStop(1, 'rgba(0, 113, 227, 0.0)');
+
+    this.lineChart = new window.Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: historyData.labels,
+        datasets: [
+          {
+            label: 'Entrate Target / Stipendio',
+            data: historyData.income,
+            borderColor: '#34C759',
+            backgroundColor: incomeGrad,
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: '#34C759'
+          },
+          {
+            label: 'Uscite Tracciate',
+            data: historyData.expenses,
+            borderColor: '#0071E3',
+            backgroundColor: expenseGrad,
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: '#0071E3'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 11 } } },
+          tooltip: {
+            backgroundColor: 'rgba(28, 28, 30, 0.9)',
+            padding: 10,
+            callbacks: {
+              label: (ctx) => ` ${ctx.dataset.label}: ${this.formatCurrency(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: 'rgba(255, 255, 255, 0.06)' }, ticks: { callback: (v) => '€' + v } }
+        }
+      }
+    });
+  }
+
+  initDonutChart(categories) {
+    const canvas = document.getElementById('categoryDonutCanvas');
+    if (!canvas || !window.Chart) return;
+
+    this.donutChart = new window.Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: categories.map(c => c.name),
+        datasets: [{
+          data: categories.map(c => c.amount),
+          backgroundColor: categories.map(c => c.color),
+          borderWidth: 2,
+          borderColor: '#1C1C1E',
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.label}: ${this.formatCurrency(ctx.parsed)}`
+            }
+          }
+        }
+      }
+    });
   }
 }

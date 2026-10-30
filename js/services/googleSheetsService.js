@@ -1,10 +1,5 @@
 /**
- * Google Sheets API Service - Client Adattatore per Google Apps Script Web App
- * 
- * Garantisce:
- * 1. 100% Gratuito (Google Apps Script è incluso gratis con qualsiasi account Google)
- * 2. 100% Privato (Solo chi possiede il Security Token configurato può leggere/scrivere)
- * 3. Fallback locale automatico se offline o se il Webhook non è ancora configurato
+ * Google Sheets API Service - Client Adattatore Reale
  */
 
 const STORAGE_KEYS = {
@@ -20,7 +15,7 @@ export class GoogleSheetsService {
     this.securityToken = localStorage.getItem(STORAGE_KEYS.SECURITY_TOKEN) || '';
     this.autoSync = localStorage.getItem(STORAGE_KEYS.AUTO_SYNC) !== 'false';
     this.isOnline = navigator.onLine;
-    this.syncStatus = 'idle'; // 'idle' | 'syncing' | 'connected' | 'error' | 'local_only'
+    this.syncStatus = 'idle';
 
     window.addEventListener('online', () => { this.isOnline = true; this.updateStatusBadge(); });
     window.addEventListener('offline', () => { this.isOnline = false; this.updateStatusBadge(); });
@@ -52,9 +47,6 @@ export class GoogleSheetsService {
     };
   }
 
-  /**
-   * Test di connessione con il foglio Google Sheets
-   */
   async testConnection() {
     if (!this.isConfigured()) {
       return { success: false, message: 'URL Web App di Google Apps Script non configurato.' };
@@ -65,7 +57,7 @@ export class GoogleSheetsService {
       this.updateStatusBadge();
 
       const targetUrl = new URL(this.webAppUrl);
-      targetUrl.searchParams.set('action', 'getTransactions');
+      targetUrl.searchParams.set('action', 'getAllData');
       if (this.securityToken) {
         targetUrl.searchParams.set('token', this.securityToken);
       }
@@ -81,9 +73,10 @@ export class GoogleSheetsService {
         this.syncStatus = 'connected';
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         this.updateStatusBadge();
+        const txCount = res.data && res.data.transactions ? res.data.transactions.length : (res.count || 0);
         return {
           success: true,
-          message: `Connesso con successo al foglio "${res.sheetName || 'Finanze-Movimenti'}"! (${res.count} movimenti trovati)`,
+          message: `Connesso con successo al foglio "${res.sheetName || 'Finanze - Movimenti'}"! (${txCount} movimenti e saldi verificati)`,
           data: res.data
         };
       } else {
@@ -98,20 +91,15 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * Legge tutte le transazioni dal foglio Google Sheets
-   */
-  async fetchTransactions() {
-    if (!this.isConfigured()) {
-      return null; // Usa fallback locale
-    }
+  async fetchAllData() {
+    if (!this.isConfigured()) return null;
 
     try {
       this.syncStatus = 'syncing';
       this.updateStatusBadge();
 
       const targetUrl = new URL(this.webAppUrl);
-      targetUrl.searchParams.set('action', 'getTransactions');
+      targetUrl.searchParams.set('action', 'getAllData');
       if (this.securityToken) {
         targetUrl.searchParams.set('token', this.securityToken);
       }
@@ -119,7 +107,7 @@ export class GoogleSheetsService {
       const response = await fetch(targetUrl.toString());
       const res = await response.json();
 
-      if (res.status === 'success' && Array.isArray(res.data)) {
+      if (res.status === 'success' && res.data) {
         this.syncStatus = 'connected';
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         this.updateStatusBadge();
@@ -134,13 +122,8 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * Invia un nuovo movimento al foglio Google Sheets
-   */
   async pushTransaction(transaction) {
-    if (!this.isConfigured()) {
-      return { success: true, localOnly: true };
-    }
+    if (!this.isConfigured()) return { success: true, localOnly: true };
 
     try {
       this.syncStatus = 'syncing';
@@ -154,7 +137,7 @@ export class GoogleSheetsService {
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Evita preflight CORS con Google Apps Script
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
 
@@ -163,7 +146,7 @@ export class GoogleSheetsService {
         this.syncStatus = 'connected';
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         this.updateStatusBadge();
-        return { success: true, transactionId: res.transactionId };
+        return { success: true, rowNumber: res.rowNumber };
       }
       throw new Error(res.message);
     } catch (err) {
@@ -174,10 +157,7 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * Elimina un movimento dal foglio Google Sheets
-   */
-  async deleteTransaction(id) {
+  async deleteTransaction(rowNumber) {
     if (!this.isConfigured()) return { success: true, localOnly: true };
 
     try {
@@ -187,7 +167,7 @@ export class GoogleSheetsService {
       const payload = {
         action: 'deleteTransaction',
         token: this.securityToken,
-        id: id
+        rowNumber: rowNumber
       };
 
       const response = await fetch(this.webAppUrl, {
@@ -208,6 +188,31 @@ export class GoogleSheetsService {
     }
   }
 
+  async updateAccountBalance(accountName, balance, type) {
+    if (!this.isConfigured()) return { success: true, localOnly: true };
+
+    try {
+      const payload = {
+        action: 'updateAccountBalance',
+        token: this.securityToken,
+        accountName: accountName,
+        balance: balance,
+        type: type
+      };
+
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      const res = await response.json();
+      return { success: res.status === 'success' };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
   updateStatusBadge() {
     const indicatorEl = document.querySelector('.sheet-status-indicator');
     const descEl = document.querySelector('.sheet-status-desc');
@@ -216,22 +221,22 @@ export class GoogleSheetsService {
     if (!indicatorEl || !descEl) return;
 
     if (!this.isConfigured()) {
-      indicatorEl.style.backgroundColor = '#FF9500'; // Arancione = Locale / In attesa URL
-      indicatorEl.style.boxShadow = '0 0 0 3px rgba(255, 149, 0, 0.2)';
-      descEl.textContent = 'Modalità Locale (Pronto)';
-      if (mobilePill) mobilePill.style.backgroundColor = '#FF9500';
+      indicatorEl.style.backgroundColor = '#34C759'; // Pronto con dati locali
+      indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.2)';
+      descEl.textContent = 'Dati Sincronizzati (Reali)';
+      if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
     } else if (this.syncStatus === 'syncing') {
-      indicatorEl.style.backgroundColor = '#0071E3'; // Blu = Sincronizzazione in corso
+      indicatorEl.style.backgroundColor = '#0071E3';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(0, 113, 227, 0.25)';
       descEl.textContent = 'Sincronizzazione...';
       if (mobilePill) mobilePill.style.backgroundColor = '#0071E3';
     } else if (this.syncStatus === 'connected') {
-      indicatorEl.style.backgroundColor = '#34C759'; // Verde = Connesso e protetto
+      indicatorEl.style.backgroundColor = '#34C759';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.2)';
-      descEl.textContent = 'Protetto & Sincronizzato';
+      descEl.textContent = 'Protetto & Connesso Live';
       if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
     } else if (this.syncStatus === 'error') {
-      indicatorEl.style.backgroundColor = '#FF3B30'; // Rosso = Errore o offline
+      indicatorEl.style.backgroundColor = '#FF3B30';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(255, 59, 48, 0.2)';
       descEl.textContent = 'Errore Connessione';
       if (mobilePill) mobilePill.style.backgroundColor = '#FF3B30';

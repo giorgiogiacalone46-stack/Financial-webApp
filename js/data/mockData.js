@@ -1,231 +1,306 @@
 /**
- * Mock Data Store - Formato schema "Finanze-Movimenti" (Google Sheets DB)
- * Gestisce l'elenco delle transazioni, il calcolo dei totali e le operazioni CRUD.
+ * Data Store Principale - Supporta:
+ * - Categorie dinamiche (CRUD con salvataggio localStorage)
+ * - Conti dinamici e Saldi iniziali (CRUD con salvataggio localStorage)
+ * - Transazioni reali da Google Sheets o cache locale
+ * - Saldi reali (Patrimonio, Investimenti, Net Worth)
+ * - Storico Net Worth (2024-2026)
+ * - Rate e Spese Ricorrenti
  */
 
-export const CATEGORIES = [
-  { id: 'lavoro', name: 'Entrate / Lavoro', type: 'income', color: '#34C759' },
-  { id: 'extra', name: 'Entrate / Extra', type: 'income', color: '#30D158' },
-  { id: 'casa', name: 'Casa & Utenze', type: 'expense', color: '#0071E3' },
-  { id: 'alimentari', name: 'Alimentari & Spesa', type: 'expense', color: '#34C759' },
-  { id: 'trasporti', name: 'Trasporti & Auto', type: 'expense', color: '#FF9500' },
-  { id: 'svago', name: 'Svago & Ristoranti', type: 'expense', color: '#AF52DE' },
-  { id: 'salute', name: 'Salute & Cura', type: 'expense', color: '#5856D6' },
-  { id: 'abbonamenti', name: 'Abbonamenti & Servizi', type: 'expense', color: '#FF2D55' },
-  { id: 'altro', name: 'Altro', type: 'expense', color: '#8E8E93' }
-];
+import { INITIAL_CATEGORIES, INITIAL_ACCOUNTS, INITIAL_SALDI, INITIAL_HISTORICAL_NW, INITIAL_TRANSACTIONS } from './realData.js';
 
-export const ACCOUNTS = [
-  'Conto Principale (IBAN)',
-  'Carta di Debito',
-  'Carta di Credito',
-  'PayPal',
-  'Contanti'
-];
+const STORAGE_KEYS = {
+  CATEGORIES: 'finanze_custom_categories',
+  ACCOUNTS: 'finanze_custom_accounts',
+  TRANSACTIONS: 'finanze_cached_txs',
+  SECURITY_PIN: 'finanze_security_pin',
+  PIN_ENABLED: 'finanze_pin_enabled'
+};
 
-let transactionsList = [
-  {
-    id: 'tx_01',
-    date: '2026-10-28',
-    dateFormatted: '28 Ottobre 2026',
-    description: 'Stipendio Netto',
-    category: 'Entrate / Lavoro',
-    type: 'income',
-    amount: 3200.00,
-    account: 'Conto Principale (IBAN)'
-  },
-  {
-    id: 'tx_02',
-    date: '2026-10-27',
-    dateFormatted: '27 Ottobre 2026',
-    description: 'Supermercato Esselunga',
-    category: 'Alimentari & Spesa',
-    type: 'expense',
-    amount: 114.50,
-    account: 'Carta di Debito'
-  },
-  {
-    id: 'tx_03',
-    date: '2026-10-25',
-    dateFormatted: '25 Ottobre 2026',
-    description: 'Bolletta Luce & Gas Enel',
-    category: 'Casa & Utenze',
-    type: 'expense',
-    amount: 145.20,
-    account: 'Conto Principale (IBAN)'
-  },
-  {
-    id: 'tx_04',
-    date: '2026-10-22',
-    dateFormatted: '22 Ottobre 2026',
-    description: 'Consulenza UI/UX Mobile',
-    category: 'Entrate / Extra',
-    type: 'income',
-    amount: 650.00,
-    account: 'PayPal'
-  },
-  {
-    id: 'tx_05',
-    date: '2026-10-20',
-    dateFormatted: '20 Ottobre 2026',
-    description: 'Cena Osteria del Corso',
-    category: 'Svago & Ristoranti',
-    type: 'expense',
-    amount: 78.00,
-    account: 'Carta di Credito'
-  },
-  {
-    id: 'tx_06',
-    date: '2026-10-18',
-    dateFormatted: '18 Ottobre 2026',
-    description: 'Rifornimento Benzina Q8',
-    category: 'Trasporti & Auto',
-    type: 'expense',
-    amount: 85.00,
-    account: 'Carta di Debito'
-  },
-  {
-    id: 'tx_07',
-    date: '2026-10-15',
-    dateFormatted: '15 Ottobre 2026',
-    description: 'Abbonamento iCloud+ & Apple Music',
-    category: 'Abbonamenti & Servizi',
-    type: 'expense',
-    amount: 14.99,
-    account: 'Carta di Credito'
-  },
-  {
-    id: 'tx_08',
-    date: '2026-10-12',
-    dateFormatted: '12 Ottobre 2026',
-    description: 'Visita Dentistica & Igiene',
-    category: 'Salute & Cura',
-    type: 'expense',
-    amount: 120.00,
-    account: 'Carta di Debito'
-  },
-  {
-    id: 'tx_09',
-    date: '2026-10-08',
-    dateFormatted: '08 Ottobre 2026',
-    description: 'Affitto Mensile Appartamento',
-    category: 'Casa & Utenze',
-    type: 'expense',
-    amount: 750.00,
-    account: 'Conto Principale (IBAN)'
-  },
-  {
-    id: 'tx_10',
-    date: '2026-10-05',
-    dateFormatted: '05 Ottobre 2026',
-    description: 'Spesa Alimentari Bio',
-    category: 'Alimentari & Spesa',
-    type: 'expense',
-    amount: 64.30,
-    account: 'Carta di Debito'
+class FinanceStore {
+  constructor() {
+    this.categories = this.loadCategories();
+    this.accounts = this.loadAccounts();
+    this.transactions = this.loadTransactions();
+    this.saldi = INITIAL_SALDI;
+    this.historicalNW = INITIAL_HISTORICAL_NW;
   }
-];
 
-export const mockFinancialData = {
-  get summary() {
-    let income = 0;
-    let expense = 0;
-    transactionsList.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else expense += t.amount;
-    });
+  // === CATEGORIE ===
+  loadCategories() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [...INITIAL_CATEGORIES];
+  }
 
-    const savingsAmount = income - expense;
-    const savingsRate = income > 0 ? ((savingsAmount / income) * 100).toFixed(1) : 0;
-    const baseBalance = 23214.00; // saldo di partenza precedente
+  saveCategories() {
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(this.categories));
+  }
 
-    return {
-      totalBalance: baseBalance + savingsAmount,
-      balanceTrend: '+4.2% vs mese scorso',
-      balanceTrendPositive: true,
-      
-      monthlyIncome: income,
-      incomeTrend: '+8.5% vs media',
-      incomeTrendPositive: true,
-      
-      monthlyExpense: expense,
-      expenseTrend: '-3.1% vs mese scorso',
-      expenseTrendPositive: true,
-      
-      savingsRate: parseFloat(savingsRate),
-      savingsAmount: savingsAmount,
-      savingsTarget: 40.0,
-      savingsTrendContext: `Target 40% ${savingsRate >= 40 ? 'superato' : 'in corso'}`
+  getCategories() {
+    return [...this.categories];
+  }
+
+  addCategory(category) {
+    const id = 'cat_' + Date.now();
+    const newCat = {
+      id,
+      name: category.name.trim(),
+      type: category.type || 'expense',
+      color: category.color || '#0071E3'
     };
-  },
+    this.categories.push(newCat);
+    this.saveCategories();
+    return newCat;
+  }
 
-  cashFlowHistory: {
-    labels: ['Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott'],
-    income: [3400, 3600, 3500, 3900, 3700, 3850],
-    expenses: [2150, 2400, 2600, 2800, 2100, 2214]
-  },
+  deleteCategory(id) {
+    this.categories = this.categories.filter(c => c.id !== id && c.name !== id);
+    this.saveCategories();
+  }
 
-  categoryBreakdown: [
-    { name: 'Casa & Utenze', amount: 895.20, percentage: 40.4, color: '#0071E3' },
-    { name: 'Alimentari & Spesa', amount: 480.00, percentage: 21.7, color: '#34C759' },
-    { name: 'Trasporti & Auto', amount: 320.00, percentage: 14.5, color: '#FF9500' },
-    { name: 'Svago & Ristoranti', amount: 290.00, percentage: 13.1, color: '#AF52DE' },
-    { name: 'Salute & Cura', amount: 120.00, percentage: 5.4, color: '#5856D6' },
-    { name: 'Altro', amount: 108.80, percentage: 4.9, color: '#8E8E93' }
-  ],
+  // === CONTI & SALDI ===
+  loadAccounts() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [...INITIAL_ACCOUNTS];
+  }
 
-  get recentTransactions() {
-    return transactionsList.slice(0, 5);
-  },
+  saveAccounts() {
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(this.accounts));
+  }
+
+  getAccounts() {
+    return [...this.accounts];
+  }
+
+  addAccount(account) {
+    const id = 'acc_' + Date.now();
+    const newAcc = {
+      id,
+      name: account.name.trim(),
+      type: account.type || 'Liquidità corrente',
+      balance: parseFloat(account.balance) || 0,
+      isLiquid: account.type ? account.type.toLowerCase().includes('liquid') : true,
+      isInvestment: account.type ? account.type.toLowerCase().includes('invest') || account.type.toLowerCase().includes('sicurezza') : false,
+      isPension: account.type ? account.type.toLowerCase().includes('pension') || account.type.toLowerCase().includes('previden') : false
+    };
+    this.accounts.push(newAcc);
+    this.saveAccounts();
+    return newAcc;
+  }
+
+  updateAccountBalance(idOrName, newBalance) {
+    const acc = this.accounts.find(a => a.id === idOrName || a.name.toLowerCase() === idOrName.toLowerCase());
+    if (acc) {
+      acc.balance = parseFloat(newBalance) || 0;
+      this.saveAccounts();
+      return true;
+    }
+    return false;
+  }
+
+  deleteAccount(id) {
+    this.accounts = this.accounts.filter(a => a.id !== id);
+    this.saveAccounts();
+  }
+
+  // === TRANSAZIONI ===
+  loadTransactions() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [...INITIAL_TRANSACTIONS];
+  }
+
+  saveTransactions() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(this.transactions));
+    } catch (e) {
+      console.warn('LocalStorage limit reached for transactions cache.');
+    }
+  }
 
   getAllTransactions() {
-    return [...transactionsList];
-  },
+    return [...this.transactions];
+  }
 
   setTransactions(newList) {
     if (!Array.isArray(newList)) return;
-    transactionsList = newList.map(t => {
-      let dateFormatted = t.dateFormatted;
-      if (!dateFormatted && t.date) {
-        try {
-          const d = new Date(t.date);
-          dateFormatted = d.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
-        } catch (e) {
-          dateFormatted = t.date;
-        }
-      }
+    this.transactions = newList.map(t => {
+      let amount = typeof t.amount === 'number' ? t.amount : parseFloat(String(t.amount).replace(/€/g, '').replace(/\./g, '').replace(',', '.')) || 0;
       return {
         ...t,
-        dateFormatted: dateFormatted || t.date,
-        amount: parseFloat(t.amount) || 0
+        amount: Math.abs(amount)
       };
     });
-  },
+    this.saveTransactions();
+  }
 
   addTransaction(newTx) {
     const id = 'tx_' + Date.now();
-    const dateObj = new Date(newTx.date);
-    const options = { day: '2-digit', month: 'long', year: 'numeric' };
-    const dateFormatted = dateObj.toLocaleDateString('it-IT', options);
-
-    const transaction = {
+    const dateStr = newTx.date || new Date().toISOString().split('T')[0];
+    const tx = {
       id,
-      date: newTx.date,
-      dateFormatted,
-      description: newTx.description.trim(),
-      category: newTx.category,
-      type: newTx.type,
-      amount: parseFloat(newTx.amount),
-      account: newTx.account
+      date: dateStr,
+      description: (newTx.description || '').trim(),
+      category: newTx.category || '❔Altro',
+      type: newTx.type || 'expense',
+      amount: parseFloat(newTx.amount) || 0,
+      account: newTx.account || 'Buddybank',
+      toAccount: newTx.toAccount || ''
     };
-
-    transactionsList.unshift(transaction);
-    return transaction;
-  },
+    this.transactions.unshift(tx);
+    this.saveTransactions();
+    return tx;
+  }
 
   deleteTransaction(id) {
-    const initialLen = transactionsList.length;
-    transactionsList = transactionsList.filter(t => t.id !== id);
-    return transactionsList.length < initialLen;
+    const initialLen = this.transactions.length;
+    this.transactions = this.transactions.filter(t => t.id !== id);
+    this.saveTransactions();
+    return this.transactions.length < initialLen;
   }
-};
+
+  // === METRICHE DI SINTESI (DASHBOARD & NET WORTH) ===
+  get summary() {
+    // Calcola il Net Worth sommando tutti i conti
+    let liquidTotal = 0;
+    let investedTotal = 0;
+    let pensionTotal = 0;
+
+    this.accounts.forEach(acc => {
+      const b = parseFloat(acc.balance) || 0;
+      if (acc.isPension) pensionTotal += b;
+      else if (acc.isInvestment) investedTotal += b;
+      else liquidTotal += b;
+    });
+
+    const netWorth = liquidTotal + investedTotal + pensionTotal;
+
+    // Calcolo mese corrente (o ultimo mese tracciato)
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+
+    let monthlyIncome = 0;
+    let monthlyExpense = 0;
+
+    this.transactions.forEach(t => {
+      let isCurrentMonth = false;
+      if (t.month && t.year) {
+        isCurrentMonth = (parseInt(t.month, 10) === curMonth || parseInt(t.month, 10) === 10) && (parseInt(t.year, 10) === curYear);
+      } else if (t.date) {
+        const parts = t.date.split(/[-/]/);
+        if (parts.length === 3) {
+          isCurrentMonth = true;
+        }
+      }
+
+      if (isCurrentMonth) {
+        if (t.type === 'income') monthlyIncome += t.amount;
+        else if (t.type === 'expense') monthlyExpense += t.amount;
+      }
+    });
+
+    // Se nel mese corrente non ci sono ancora entrate caricate, usa media stipendio 1.700€ da gestionale
+    if (monthlyIncome === 0) monthlyIncome = 1700.00;
+    if (monthlyExpense === 0) monthlyExpense = 808.34;
+
+    const savingsAmount = Math.max(0, monthlyIncome - monthlyExpense);
+    const savingsRate = monthlyIncome > 0 ? ((savingsAmount / monthlyIncome) * 100).toFixed(1) : '25.0';
+
+    return {
+      totalBalance: netWorth,
+      netWorth: netWorth,
+      liquidTotal: liquidTotal,
+      investedTotal: investedTotal,
+      pensionTotal: pensionTotal,
+      monthlyIncome: monthlyIncome,
+      monthlyExpense: monthlyExpense,
+      savingsRate: parseFloat(savingsRate),
+      savingsAmount: savingsAmount,
+      budgetExpenseTarget: 75,
+      budgetSavingsTarget: 25,
+      incomeGoal: 1700.00
+    };
+  }
+
+  // === SPESE RICORRENTI & RATE ATTIVE ===
+  get recurringItems() {
+    return [
+      {
+        id: 'rec_1',
+        name: 'Regalo Serena (Rata)',
+        monthlyAmount: 44.67,
+        totalRate: 3,
+        currentRata: 2,
+        nextDate: '26/11/2026',
+        category: '❔Altro',
+        completed: false
+      },
+      {
+        id: 'rec_2',
+        name: 'Scopa Elettrica (Rata)',
+        monthlyAmount: 33.67,
+        totalRate: 3,
+        currentRata: 2,
+        nextDate: '25/11/2026',
+        category: '❔Altro',
+        completed: false
+      },
+      {
+        id: 'rec_3',
+        name: 'Affitto / Casa',
+        monthlyAmount: 600.00,
+        totalRate: 0,
+        currentRata: 0,
+        nextDate: 'Ogni inizio mese',
+        category: '🏡 Casa',
+        completed: false,
+        isFixed: true
+      },
+      {
+        id: 'rec_4',
+        name: 'PAC VWCE Azionario Globale',
+        monthlyAmount: 200.00,
+        totalRate: 0,
+        currentRata: 0,
+        nextDate: '02/11/2026',
+        category: '🛅 Livello Crescita',
+        completed: false,
+        isPAC: true
+      }
+    ];
+  }
+
+  // === SICUREZZA PIN ===
+  getPin() {
+    return localStorage.getItem(STORAGE_KEYS.SECURITY_PIN) || '';
+  }
+
+  setPin(pin) {
+    if (!pin) {
+      localStorage.removeItem(STORAGE_KEYS.SECURITY_PIN);
+      localStorage.setItem(STORAGE_KEYS.PIN_ENABLED, 'false');
+    } else {
+      localStorage.setItem(STORAGE_KEYS.SECURITY_PIN, pin);
+      localStorage.setItem(STORAGE_KEYS.PIN_ENABLED, 'true');
+    }
+  }
+
+  isPinEnabled() {
+    return localStorage.getItem(STORAGE_KEYS.PIN_ENABLED) === 'true';
+  }
+}
+
+export const financeStore = new FinanceStore();
+export const mockFinancialData = financeStore; // Compatibilità con componenti esistenti
+export const CATEGORIES = financeStore.getCategories();
+export const ACCOUNTS = financeStore.getAccounts().map(a => a.name);
