@@ -49,8 +49,18 @@ export class FinancialAssistantService {
     const budget = financeStore.getBudget50_30_20();
     const fire = financeStore.calculateFireMetrics();
 
-    // 1. Radar Anomalie
+    // 1. Radar Anomalie & Freshness Chiusura Mese
     const anomalyInsights = [];
+    const recStatus = financeStore.getMonthlyReconciliationStatus();
+    if (!recStatus.isFullyReconciled) {
+      anomalyInsights.push({
+        title: `Chiusura Mese: ${recStatus.targetMonthName} in Sospeso`,
+        desc: `Il ${recStatus.staleAccounts.map(a => `<strong>${a.name}</strong> (fermo a ${a.lastMonthName})`).join(', ')} non è aggiornato. Inserisci la quota da busta paga per consolidare il Net Worth.`,
+        level: 'warning',
+        action: 'Apri la Chiusura Fine Mese dalla Dashboard o dallo Storico per riconciliare i saldi.'
+      });
+    }
+
     if (anomalies.length > 0) {
       anomalies.forEach(a => {
         anomalyInsights.push({
@@ -60,7 +70,7 @@ export class FinancialAssistantService {
           action: 'Verifica le singole uscite per accertarti che non siano addebiti non previsti.'
         });
       });
-    } else {
+    } else if (recStatus.isFullyReconciled) {
       anomalyInsights.push({
         title: 'Nessuna anomalia rilevata',
         desc: 'I tuoi consumi del mese sono perfettamente allineati alle medie storiche.',
@@ -142,6 +152,15 @@ export class FinancialAssistantService {
     }
 
     // Motore Locale Analitico (Sempre disponibile, zero latenza, 100% privacy)
+    if (q.includes('conguagli') || q.includes('chiusur') || q.includes('fine mese') || q.includes('pensione') || q.includes('busta paga')) {
+      const rec = financeStore.getMonthlyReconciliationStatus();
+      if (!rec.isFullyReconciled) {
+        return `⚠️ **Chiusura Mese di ${rec.targetMonthName} in Sospeso**:\n\nIl conto **Fondo Pensione** è fermo a ${rec.staleAccounts[0].lastMonthName} (${this.formatCurrency(rec.staleAccounts[0].balance)}).\n\n👉 **Come procedere**:\n1. Apri la funzione **Chiusura Fine Mese** dalla Dashboard o dalla sezione *Storico*.\n2. Inserisci semplicemente la **quota letta sulla busta paga** (l'app calcolerà automaticamente il saldo risultante sommando la differenza).\n3. Clicca su **Conferma Chiusura** per consolidare il Net Worth e allineare il mese!`;
+      } else {
+        return `✅ **Chiusura Fine Mese Allineata**:\nTutti i tuoi conti risultano riconciliati e aggiornati per **${rec.targetMonthName}**. Il Patrimonio Netto ufficiale consolidato è di **${this.formatCurrency(summary.netWorth)}**.`;
+      }
+    }
+
     if (q.includes('spend') || q.includes('giorno') || q.includes('budget') || q.includes('posso')) {
       return `📊 **Spesa Sicura Giornaliera**: puoi spendere fino a **${this.formatCurrency(budget.dailySafeSpend)} al giorno** per i restanti **${budget.daysRemaining} giorni** del mese senza intaccare la tua quota di risparmio del 25%.\n\nIl tuo budget per i bisogni è al momento saturo al **${budget.needs.pct}%**, mentre lo svago è al **${budget.wants.pct}%**.`;
     }

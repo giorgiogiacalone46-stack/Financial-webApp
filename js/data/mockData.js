@@ -73,11 +73,31 @@ class FinanceStore {
 
   // === CONTI & SALDI ===
   loadAccounts() {
+    let accs = [];
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      if (saved) return JSON.parse(saved);
+      if (saved) accs = JSON.parse(saved);
     } catch (e) {}
-    return [...INITIAL_ACCOUNTS];
+
+    if (!accs || accs.length === 0) {
+      accs = JSON.parse(JSON.stringify(INITIAL_ACCOUNTS));
+    }
+
+    // Assicura la presenza dei metadati di riconciliazione e freschezza
+    accs.forEach(a => {
+      const isPension = a.isPension || (a.type || '').toLowerCase().includes('pension') || (a.name || '').toLowerCase().includes('pension');
+      if (!a.lastReconciledMonth) {
+        a.lastReconciledMonth = isPension ? '09/2026' : '10/2026';
+      }
+      if (!a.lastReconciledDate) {
+        a.lastReconciledDate = isPension ? '30/09/2026' : '28/10/2026';
+      }
+      if (!a.defaultMode) {
+        a.defaultMode = isPension ? 'delta' : 'balance';
+      }
+    });
+
+    return accs;
   }
 
   saveAccounts() {
@@ -513,31 +533,100 @@ class FinanceStore {
     return this.recurringItems || [];
   }
 
-  // === CONGUAGLI & RICONCILIAZIONE SALDI ===
-  reconcileAccount(accountName, newBalance, createMovement = true, customNote = '') {
+  // === CONGUAGLI & RICONCILIAZIONE SALDI (FINE MESE) ===
+  getMonthlyReconciliationStatus(targetMonthKey = null) {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const defaultMonthKey = `${String(curMonth).padStart(2, '0')}/${curYear}`;
+    const targetKey = targetMonthKey || defaultMonthKey;
+
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+    let tM = curMonth;
+    let tY = curYear;
+    if (targetKey && targetKey.includes('/')) {
+      const parts = targetKey.split('/').map(n => parseInt(n, 10));
+      if (!isNaN(parts[0])) tM = parts[0];
+      if (!isNaN(parts[1])) tY = parts[1];
+    }
+    const targetMonthName = `${monthNames[(tM || curMonth) - 1]} ${tY || curYear}`;
+
+    const staleAccounts = [];
+    const updatedAccounts = [];
+
+    this.accounts.forEach(acc => {
+      const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension') || (acc.name || '').toLowerCase().includes('pension');
+      const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
+      
+      const isStale = (recMonth !== targetKey);
+      let lastMonthName = 'Precedente';
+      if (recMonth && recMonth.includes('/')) {
+        const [lm, ly] = recMonth.split('/').map(n => parseInt(n, 10));
+        lastMonthName = `${monthNames[(lm || 1) - 1]} ${ly}`;
+      }
+
+      const item = {
+        ...acc,
+        isPension,
+        lastReconciledMonth: recMonth,
+        lastMonthName,
+        defaultMode: acc.defaultMode || (isPension ? 'delta' : 'balance')
+      };
+
+      if (isStale) {
+        staleAccounts.push(item);
+      } else {
+        updatedAccounts.push(item);
+      }
+    });
+
+    return {
+      targetMonth: targetKey,
+      targetMonthName,
+      isFullyReconciled: staleAccounts.length === 0,
+      staleAccounts,
+      updatedAccounts,
+      totalAccounts: this.accounts.length,
+      pendingCount: staleAccounts.length
+    };
+  }
+
+  reconcileAccount(accountName, newBalance, createMovement = true, customNote = '', monthKey = null, mode = 'balance', deltaAmount = 0) {
     const target = this.accounts.find(a => a.name.toLowerCase() === accountName.toLowerCase() || a.id === accountName);
     if (!target) return { success: false, error: 'Conto non trovato' };
 
     const oldBalance = parseFloat(target.balance) || 0;
-    const targetBalance = parseFloat(newBalance) || 0;
-    const delta = Math.round((targetBalance - oldBalance) * 100) / 100;
+    let targetBalance = parseFloat(newBalance) || 0;
+    let delta = 0;
+
+    if (mode === 'delta') {
+      delta = parseFloat(deltaAmount) || 0;
+      targetBalance = Math.round((oldBalance + delta) * 100) / 100;
+    } else {
+      targetBalance = parseFloat(newBalance) || 0;
+      delta = Math.round((targetBalance - oldBalance) * 100) / 100;
+    }
+
+    const now = new Date();
+    const curMonthKey = monthKey || `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const todayFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
     let createdTx = null;
     if (createMovement && Math.abs(delta) > 0.001) {
       const isPositive = delta > 0;
       const type = isPositive ? 'income' : 'expense';
-      const now = new Date();
-      const d = String(now.getDate()).padStart(2, '0');
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const y = now.getFullYear();
+      const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
 
       const tx = {
         id: 'tx_rec_' + Date.now(),
-        year: String(y),
+        year: String(now.getFullYear()),
         month: String(now.getMonth() + 1),
-        date: `${d}/${m}/${y}`,
-        description: customNote || `Rettifica Saldo (${target.name})`,
-        category: '⚖️ Conguaglio / Rettifica',
+        date: todayFormatted,
+        description: customNote || (isPension ? `Versamento Fondo Pensione Busta Paga (${curMonthKey})` : `Rettifica Saldo (${target.name})`),
+        category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
         type: type,
         amount: Math.abs(delta),
         account: target.name,
@@ -551,12 +640,20 @@ class FinanceStore {
     }
 
     target.balance = targetBalance;
+    target.lastReconciledMonth = curMonthKey;
+    target.lastReconciledDate = todayFormatted;
+    target.defaultMode = mode;
     this.saveAccounts();
 
     // Aggiorna e fissa lo snapshot per il mese del conguaglio
-    const now = new Date();
-    const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
     this.saveNetWorthSnapshot(curMonthKey, this.summary.netWorth);
+
+    // Se configurato Google Sheets, aggiorna saldo da remoto
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        window.googleSheetsService.updateAccountBalance(target.name, targetBalance, target.type);
+      }
+    } catch (e) {}
 
     return {
       success: true,
@@ -565,6 +662,103 @@ class FinanceStore {
       newBalance: targetBalance,
       delta,
       createdTx
+    };
+  }
+
+  executeMonthlyClosing(targetMonthKey, updates = [], options = {}) {
+    // updates: Array di { accountName, mode: 'balance' | 'delta', value: number, note: string, createTx: boolean }
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const targetKey = targetMonthKey || `${String(curMonth).padStart(2, '0')}/${curYear}`;
+
+    let tM = curMonth;
+    let tY = curYear;
+    if (targetKey.includes('/')) {
+      const parts = targetKey.split('/').map(n => parseInt(n, 10));
+      if (!isNaN(parts[0])) tM = parts[0];
+      if (!isNaN(parts[1])) tY = parts[1];
+    }
+
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+    const monthName = `${monthNames[(tM || curMonth) - 1]} ${tY || curYear}`;
+    const todayFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+    const oldTotalNW = this.summary.netWorth;
+    const modifiedAccounts = [];
+    const createdTransactions = [];
+
+    updates.forEach(u => {
+      const target = this.accounts.find(a => a.name.toLowerCase() === u.accountName.toLowerCase() || a.id === u.accountName);
+      if (!target) return;
+
+      const oldBal = parseFloat(target.balance) || 0;
+      let newBal = oldBal;
+      let delta = 0;
+
+      if (u.mode === 'delta') {
+        delta = parseFloat(u.value) || 0;
+        newBal = Math.round((oldBal + delta) * 100) / 100;
+      } else {
+        newBal = parseFloat(u.value) || 0;
+        delta = Math.round((newBal - oldBal) * 100) / 100;
+      }
+
+      target.balance = newBal;
+      target.lastReconciledMonth = targetKey;
+      target.lastReconciledDate = todayFormatted;
+      target.defaultMode = u.mode;
+      modifiedAccounts.push({ name: target.name, oldBal, newBal, delta });
+
+      if (u.createTx && Math.abs(delta) > 0.001) {
+        const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
+        const isPositive = delta > 0;
+        const tx = {
+          id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          year: String(tY),
+          month: String(tM),
+          date: todayFormatted,
+          description: u.note || (isPension ? `Versamento Fondo Pensione Busta Paga (${monthName})` : `Conguaglio Saldo ${target.name} (${monthName})`),
+          category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
+          type: isPositive ? 'income' : 'expense',
+          amount: Math.abs(delta),
+          account: target.name,
+          fromAccount: target.name,
+          toAccount: ''
+        };
+        this.transactions.unshift(tx);
+        createdTransactions.push(tx);
+      }
+
+      // Sincronizzazione Google Sheets
+      try {
+        if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+          window.googleSheetsService.updateAccountBalance(target.name, newBal, target.type);
+        }
+      } catch (err) {}
+    });
+
+    this.saveAccounts();
+    if (createdTransactions.length > 0) {
+      this.saveTransactions();
+    }
+
+    // Salva lo snapshot del Net Worth
+    const newTotalNW = this.summary.netWorth;
+    this.saveNetWorthSnapshot(targetKey, newTotalNW);
+
+    return {
+      success: true,
+      targetMonthKey: targetKey,
+      monthName,
+      oldTotalNW,
+      newTotalNW,
+      nwDelta: Math.round((newTotalNW - oldTotalNW) * 100) / 100,
+      modifiedAccounts,
+      createdTransactions
     };
   }
 

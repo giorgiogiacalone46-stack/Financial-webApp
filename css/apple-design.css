@@ -5596,6 +5596,53 @@ body.privacy-mode .privacy-toggle-btn .icon-eye-closed {
 /* ==========================================================================
    Smart Categories Auto-Suggest & Merge
    ========================================================================== */
+/* ==========================================================================
+   Chiusura Fine Mese & Riconciliazione Saldi Studio
+   ========================================================================== */
+.monthly-closing-banner-card {
+  border-left: 4px solid var(--apple-orange) !important;
+  background: var(--bg-card);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.reconcile-card {
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.reconcile-card.reconcile-stale {
+  border-color: rgba(255, 149, 0, 0.45) !important;
+  box-shadow: 0 0 0 1px rgba(255, 149, 0, 0.15);
+}
+
+.reconcile-card.reconcile-focused {
+  border-color: var(--apple-blue) !important;
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+}
+
+.seg-btn-mini {
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.seg-btn-mini:hover:not(.active) {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+body.privacy-mode #preview-new-nw,
+body.privacy-mode #preview-nw-delta,
+body.privacy-mode [id^="preview-acc-bal-"],
+body.privacy-mode [id^="preview-acc-delta-"],
+body.privacy-mode .input-reconcile-val {
+  filter: blur(8px);
+  user-select: none;
+}
+
+@media (max-width: 600px) {
+  .reconcile-card div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 .category-suggestion-pill {
   display: inline-flex;
   align-items: center;

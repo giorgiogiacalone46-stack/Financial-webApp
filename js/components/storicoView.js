@@ -6,6 +6,7 @@
 
 import { financeStore } from '../data/mockData.js';
 import { getIcon } from './icons.js';
+import { monthlyClosingModal } from './monthlyClosingModal.js';
 
 export class StoricoView {
   constructor() {
@@ -28,6 +29,7 @@ export class StoricoView {
     // Recupera la serie storica dinamica calcolata da baseline + movimenti + conguagli
     const rawData = financeStore.getHistoricalNetWorth();
     const summary = financeStore.summary;
+    const recStatus = financeStore.getMonthlyReconciliationStatus();
 
     // Filtra per anno se selezionato
     const filteredData = this.selectedYear === 'all' 
@@ -84,9 +86,9 @@ export class StoricoView {
                 ${getIcon('savings', 13)}
                 <span>Backup JSON</span>
               </button>
-              <button class="apple-btn-secondary" id="btn-quick-conguaglio" style="font-size: 12px; padding: 7px 14px; border-radius: var(--radius-pill); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Apri riconciliazione saldi e conguagli">
-                ${getIcon('balance', 13)}
-                <span>Conguagli</span>
+              <button class="apple-btn-secondary" id="btn-quick-conguaglio" style="font-size: 12px; padding: 7px 14px; border-radius: var(--radius-pill); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; ${!recStatus.isFullyReconciled ? 'border-color: var(--apple-orange); color: var(--apple-orange); background: rgba(255, 149, 0, 0.08);' : ''}" title="Apri studio chiusura fine mese e conguaglio saldi">
+                ${getIcon('conguaglio', 13)}
+                <span>Chiusura Fine Mese ${!recStatus.isFullyReconciled ? `(${recStatus.pendingCount} in sospeso)` : ''}</span>
               </button>
             </div>
           </div>
@@ -137,7 +139,9 @@ export class StoricoView {
 
                   let statusChip = '';
                   if (isCurrent) {
-                    statusChip = `<span class="status-chip chip-blue"><span class="live-dot"></span> In corso</span>`;
+                    statusChip = !recStatus.isFullyReconciled 
+                      ? `<span class="status-chip chip-orange"><span class="live-dot" style="background-color: var(--apple-orange);"></span> In sospeso (${recStatus.pendingCount})</span>`
+                      : `<span class="status-chip chip-blue"><span class="live-dot"></span> In corso</span>`;
                   } else if (isPositive) {
                     statusChip = `<span class="status-chip chip-green">Crescita</span>`;
                   } else {
@@ -155,7 +159,13 @@ export class StoricoView {
                         ${diff !== 0 ? (isPositive ? '+' : '') + this.formatCurrency(diff) + ` (${diffPercent}%)` : '-'}
                       </td>
                       <td>
-                        ${statusChip}
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          ${statusChip}
+                          <button class="apple-btn-secondary btn-table-reconcile" data-month="${row.month}" style="padding: 2px 8px; font-size: 11px; border-radius: var(--radius-pill); cursor: pointer;" title="Apri riconciliazione e chiusura per ${row.month}">
+                            ${getIcon('conguaglio', 11)}
+                            <span>${isCurrent ? 'Chiudi' : 'Modifica'}</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   `;
@@ -366,7 +376,20 @@ export class StoricoView {
     }
 
     document.getElementById('btn-quick-conguaglio')?.addEventListener('click', () => {
-      window.location.hash = '#impostazioni';
+      monthlyClosingModal.open({
+        targetMonth: recStatus.targetMonth,
+        onSuccess: () => this.render(container)
+      });
+    });
+
+    container.querySelectorAll('.btn-table-reconcile').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetMonth = e.currentTarget.dataset.month;
+        monthlyClosingModal.open({
+          targetMonth: targetMonth,
+          onSuccess: () => this.render(container)
+        });
+      });
     });
   }
 

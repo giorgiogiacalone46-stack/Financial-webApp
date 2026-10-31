@@ -118,12 +118,12 @@ export const DEFAULT_SMART_RULES = [
 ];
 
 export const INITIAL_ACCOUNTS = [
-  { id: 'buddybank', name: 'Buddybank', type: 'Liquidità corrente', balance: 4160.00, isLiquid: true },
-  { id: 'xeon', name: 'Trade Republic - XEON', type: 'Fondo Emergenza / Sicurezza', balance: 5383.32, isInvestment: true },
-  { id: 'vwce', name: 'Trade Republic - VWCE', type: 'Azionario Globale (Lungo Termine)', balance: 3410.25, isInvestment: true },
-  { id: 'pensione', name: 'Fondo Pensione', type: 'Previdenza complementare', balance: 4391.24, isPension: true },
-  { id: 'contanti', name: 'Contanti', type: 'Liquidità contante', balance: 10.00, isLiquid: true },
-  { id: 'buoni_pasto', name: 'Buoni Pasto', type: 'Buoni Pasto / Benefit', balance: 388.50, isLiquid: true }
+  { id: 'buddybank', name: 'Buddybank', type: 'Liquidità corrente', balance: 4160.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'xeon', name: 'Trade Republic - XEON', type: 'Fondo Emergenza / Sicurezza', balance: 5383.32, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'vwce', name: 'Trade Republic - VWCE', type: 'Azionario Globale (Lungo Termine)', balance: 3410.25, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'pensione', name: 'Fondo Pensione', type: 'Previdenza complementare', balance: 4391.24, isPension: true, lastReconciledMonth: '09/2026', lastReconciledDate: '30/09/2026', defaultMode: 'delta' },
+  { id: 'contanti', name: 'Contanti', type: 'Liquidità contante', balance: 10.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'buoni_pasto', name: 'Buoni Pasto', type: 'Buoni Pasto / Benefit', balance: 388.50, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' }
 ];
 
 export const INITIAL_SALDI = [

@@ -474,12 +474,12 @@ const DEFAULT_SMART_RULES = [
 ];
 
 const INITIAL_ACCOUNTS = [
-  { id: 'buddybank', name: 'Buddybank', type: 'Liquidità corrente', balance: 4160.00, isLiquid: true },
-  { id: 'xeon', name: 'Trade Republic - XEON', type: 'Fondo Emergenza / Sicurezza', balance: 5383.32, isInvestment: true },
-  { id: 'vwce', name: 'Trade Republic - VWCE', type: 'Azionario Globale (Lungo Termine)', balance: 3410.25, isInvestment: true },
-  { id: 'pensione', name: 'Fondo Pensione', type: 'Previdenza complementare', balance: 4391.24, isPension: true },
-  { id: 'contanti', name: 'Contanti', type: 'Liquidità contante', balance: 10.00, isLiquid: true },
-  { id: 'buoni_pasto', name: 'Buoni Pasto', type: 'Buoni Pasto / Benefit', balance: 388.50, isLiquid: true }
+  { id: 'buddybank', name: 'Buddybank', type: 'Liquidità corrente', balance: 4160.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'xeon', name: 'Trade Republic - XEON', type: 'Fondo Emergenza / Sicurezza', balance: 5383.32, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'vwce', name: 'Trade Republic - VWCE', type: 'Azionario Globale (Lungo Termine)', balance: 3410.25, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'pensione', name: 'Fondo Pensione', type: 'Previdenza complementare', balance: 4391.24, isPension: true, lastReconciledMonth: '09/2026', lastReconciledDate: '30/09/2026', defaultMode: 'delta' },
+  { id: 'contanti', name: 'Contanti', type: 'Liquidità contante', balance: 10.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
+  { id: 'buoni_pasto', name: 'Buoni Pasto', type: 'Buoni Pasto / Benefit', balance: 388.50, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' }
 ];
 
 const INITIAL_SALDI = [
@@ -10681,11 +10681,31 @@ class FinanceStore {
 
   // === CONTI & SALDI ===
   loadAccounts() {
+    let accs = [];
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      if (saved) return JSON.parse(saved);
+      if (saved) accs = JSON.parse(saved);
     } catch (e) {}
-    return [...INITIAL_ACCOUNTS];
+
+    if (!accs || accs.length === 0) {
+      accs = JSON.parse(JSON.stringify(INITIAL_ACCOUNTS));
+    }
+
+    // Assicura la presenza dei metadati di riconciliazione e freschezza
+    accs.forEach(a => {
+      const isPension = a.isPension || (a.type || '').toLowerCase().includes('pension') || (a.name || '').toLowerCase().includes('pension');
+      if (!a.lastReconciledMonth) {
+        a.lastReconciledMonth = isPension ? '09/2026' : '10/2026';
+      }
+      if (!a.lastReconciledDate) {
+        a.lastReconciledDate = isPension ? '30/09/2026' : '28/10/2026';
+      }
+      if (!a.defaultMode) {
+        a.defaultMode = isPension ? 'delta' : 'balance';
+      }
+    });
+
+    return accs;
   }
 
   saveAccounts() {
@@ -11121,31 +11141,100 @@ class FinanceStore {
     return this.recurringItems || [];
   }
 
-  // === CONGUAGLI & RICONCILIAZIONE SALDI ===
-  reconcileAccount(accountName, newBalance, createMovement = true, customNote = '') {
+  // === CONGUAGLI & RICONCILIAZIONE SALDI (FINE MESE) ===
+  getMonthlyReconciliationStatus(targetMonthKey = null) {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const defaultMonthKey = `${String(curMonth).padStart(2, '0')}/${curYear}`;
+    const targetKey = targetMonthKey || defaultMonthKey;
+
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+    let tM = curMonth;
+    let tY = curYear;
+    if (targetKey && targetKey.includes('/')) {
+      const parts = targetKey.split('/').map(n => parseInt(n, 10));
+      if (!isNaN(parts[0])) tM = parts[0];
+      if (!isNaN(parts[1])) tY = parts[1];
+    }
+    const targetMonthName = `${monthNames[(tM || curMonth) - 1]} ${tY || curYear}`;
+
+    const staleAccounts = [];
+    const updatedAccounts = [];
+
+    this.accounts.forEach(acc => {
+      const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension') || (acc.name || '').toLowerCase().includes('pension');
+      const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
+      
+      const isStale = (recMonth !== targetKey);
+      let lastMonthName = 'Precedente';
+      if (recMonth && recMonth.includes('/')) {
+        const [lm, ly] = recMonth.split('/').map(n => parseInt(n, 10));
+        lastMonthName = `${monthNames[(lm || 1) - 1]} ${ly}`;
+      }
+
+      const item = {
+        ...acc,
+        isPension,
+        lastReconciledMonth: recMonth,
+        lastMonthName,
+        defaultMode: acc.defaultMode || (isPension ? 'delta' : 'balance')
+      };
+
+      if (isStale) {
+        staleAccounts.push(item);
+      } else {
+        updatedAccounts.push(item);
+      }
+    });
+
+    return {
+      targetMonth: targetKey,
+      targetMonthName,
+      isFullyReconciled: staleAccounts.length === 0,
+      staleAccounts,
+      updatedAccounts,
+      totalAccounts: this.accounts.length,
+      pendingCount: staleAccounts.length
+    };
+  }
+
+  reconcileAccount(accountName, newBalance, createMovement = true, customNote = '', monthKey = null, mode = 'balance', deltaAmount = 0) {
     const target = this.accounts.find(a => a.name.toLowerCase() === accountName.toLowerCase() || a.id === accountName);
     if (!target) return { success: false, error: 'Conto non trovato' };
 
     const oldBalance = parseFloat(target.balance) || 0;
-    const targetBalance = parseFloat(newBalance) || 0;
-    const delta = Math.round((targetBalance - oldBalance) * 100) / 100;
+    let targetBalance = parseFloat(newBalance) || 0;
+    let delta = 0;
+
+    if (mode === 'delta') {
+      delta = parseFloat(deltaAmount) || 0;
+      targetBalance = Math.round((oldBalance + delta) * 100) / 100;
+    } else {
+      targetBalance = parseFloat(newBalance) || 0;
+      delta = Math.round((targetBalance - oldBalance) * 100) / 100;
+    }
+
+    const now = new Date();
+    const curMonthKey = monthKey || `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const todayFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
     let createdTx = null;
     if (createMovement && Math.abs(delta) > 0.001) {
       const isPositive = delta > 0;
       const type = isPositive ? 'income' : 'expense';
-      const now = new Date();
-      const d = String(now.getDate()).padStart(2, '0');
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const y = now.getFullYear();
+      const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
 
       const tx = {
         id: 'tx_rec_' + Date.now(),
-        year: String(y),
+        year: String(now.getFullYear()),
         month: String(now.getMonth() + 1),
-        date: `${d}/${m}/${y}`,
-        description: customNote || `Rettifica Saldo (${target.name})`,
-        category: '⚖️ Conguaglio / Rettifica',
+        date: todayFormatted,
+        description: customNote || (isPension ? `Versamento Fondo Pensione Busta Paga (${curMonthKey})` : `Rettifica Saldo (${target.name})`),
+        category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
         type: type,
         amount: Math.abs(delta),
         account: target.name,
@@ -11159,12 +11248,20 @@ class FinanceStore {
     }
 
     target.balance = targetBalance;
+    target.lastReconciledMonth = curMonthKey;
+    target.lastReconciledDate = todayFormatted;
+    target.defaultMode = mode;
     this.saveAccounts();
 
     // Aggiorna e fissa lo snapshot per il mese del conguaglio
-    const now = new Date();
-    const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
     this.saveNetWorthSnapshot(curMonthKey, this.summary.netWorth);
+
+    // Se configurato Google Sheets, aggiorna saldo da remoto
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        window.googleSheetsService.updateAccountBalance(target.name, targetBalance, target.type);
+      }
+    } catch (e) {}
 
     return {
       success: true,
@@ -11173,6 +11270,103 @@ class FinanceStore {
       newBalance: targetBalance,
       delta,
       createdTx
+    };
+  }
+
+  executeMonthlyClosing(targetMonthKey, updates = [], options = {}) {
+    // updates: Array di { accountName, mode: 'balance' | 'delta', value: number, note: string, createTx: boolean }
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const targetKey = targetMonthKey || `${String(curMonth).padStart(2, '0')}/${curYear}`;
+
+    let tM = curMonth;
+    let tY = curYear;
+    if (targetKey.includes('/')) {
+      const parts = targetKey.split('/').map(n => parseInt(n, 10));
+      if (!isNaN(parts[0])) tM = parts[0];
+      if (!isNaN(parts[1])) tY = parts[1];
+    }
+
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+    const monthName = `${monthNames[(tM || curMonth) - 1]} ${tY || curYear}`;
+    const todayFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+    const oldTotalNW = this.summary.netWorth;
+    const modifiedAccounts = [];
+    const createdTransactions = [];
+
+    updates.forEach(u => {
+      const target = this.accounts.find(a => a.name.toLowerCase() === u.accountName.toLowerCase() || a.id === u.accountName);
+      if (!target) return;
+
+      const oldBal = parseFloat(target.balance) || 0;
+      let newBal = oldBal;
+      let delta = 0;
+
+      if (u.mode === 'delta') {
+        delta = parseFloat(u.value) || 0;
+        newBal = Math.round((oldBal + delta) * 100) / 100;
+      } else {
+        newBal = parseFloat(u.value) || 0;
+        delta = Math.round((newBal - oldBal) * 100) / 100;
+      }
+
+      target.balance = newBal;
+      target.lastReconciledMonth = targetKey;
+      target.lastReconciledDate = todayFormatted;
+      target.defaultMode = u.mode;
+      modifiedAccounts.push({ name: target.name, oldBal, newBal, delta });
+
+      if (u.createTx && Math.abs(delta) > 0.001) {
+        const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
+        const isPositive = delta > 0;
+        const tx = {
+          id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          year: String(tY),
+          month: String(tM),
+          date: todayFormatted,
+          description: u.note || (isPension ? `Versamento Fondo Pensione Busta Paga (${monthName})` : `Conguaglio Saldo ${target.name} (${monthName})`),
+          category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
+          type: isPositive ? 'income' : 'expense',
+          amount: Math.abs(delta),
+          account: target.name,
+          fromAccount: target.name,
+          toAccount: ''
+        };
+        this.transactions.unshift(tx);
+        createdTransactions.push(tx);
+      }
+
+      // Sincronizzazione Google Sheets
+      try {
+        if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+          window.googleSheetsService.updateAccountBalance(target.name, newBal, target.type);
+        }
+      } catch (err) {}
+    });
+
+    this.saveAccounts();
+    if (createdTransactions.length > 0) {
+      this.saveTransactions();
+    }
+
+    // Salva lo snapshot del Net Worth
+    const newTotalNW = this.summary.netWorth;
+    this.saveNetWorthSnapshot(targetKey, newTotalNW);
+
+    return {
+      success: true,
+      targetMonthKey: targetKey,
+      monthName,
+      oldTotalNW,
+      newTotalNW,
+      nwDelta: Math.round((newTotalNW - oldTotalNW) * 100) / 100,
+      modifiedAccounts,
+      createdTransactions
     };
   }
 
@@ -12547,8 +12741,18 @@ class FinancialAssistantService {
     const budget = financeStore.getBudget50_30_20();
     const fire = financeStore.calculateFireMetrics();
 
-    // 1. Radar Anomalie
+    // 1. Radar Anomalie & Freshness Chiusura Mese
     const anomalyInsights = [];
+    const recStatus = financeStore.getMonthlyReconciliationStatus();
+    if (!recStatus.isFullyReconciled) {
+      anomalyInsights.push({
+        title: `Chiusura Mese: ${recStatus.targetMonthName} in Sospeso`,
+        desc: `Il ${recStatus.staleAccounts.map(a => `<strong>${a.name}</strong> (fermo a ${a.lastMonthName})`).join(', ')} non è aggiornato. Inserisci la quota da busta paga per consolidare il Net Worth.`,
+        level: 'warning',
+        action: 'Apri la Chiusura Fine Mese dalla Dashboard o dallo Storico per riconciliare i saldi.'
+      });
+    }
+
     if (anomalies.length > 0) {
       anomalies.forEach(a => {
         anomalyInsights.push({
@@ -12558,7 +12762,7 @@ class FinancialAssistantService {
           action: 'Verifica le singole uscite per accertarti che non siano addebiti non previsti.'
         });
       });
-    } else {
+    } else if (recStatus.isFullyReconciled) {
       anomalyInsights.push({
         title: 'Nessuna anomalia rilevata',
         desc: 'I tuoi consumi del mese sono perfettamente allineati alle medie storiche.',
@@ -12640,6 +12844,15 @@ class FinancialAssistantService {
     }
 
     // Motore Locale Analitico (Sempre disponibile, zero latenza, 100% privacy)
+    if (q.includes('conguagli') || q.includes('chiusur') || q.includes('fine mese') || q.includes('pensione') || q.includes('busta paga')) {
+      const rec = financeStore.getMonthlyReconciliationStatus();
+      if (!rec.isFullyReconciled) {
+        return `⚠️ **Chiusura Mese di ${rec.targetMonthName} in Sospeso**:\n\nIl conto **Fondo Pensione** è fermo a ${rec.staleAccounts[0].lastMonthName} (${this.formatCurrency(rec.staleAccounts[0].balance)}).\n\n👉 **Come procedere**:\n1. Apri la funzione **Chiusura Fine Mese** dalla Dashboard o dalla sezione *Storico*.\n2. Inserisci semplicemente la **quota letta sulla busta paga** (l'app calcolerà automaticamente il saldo risultante sommando la differenza).\n3. Clicca su **Conferma Chiusura** per consolidare il Net Worth e allineare il mese!`;
+      } else {
+        return `✅ **Chiusura Fine Mese Allineata**:\nTutti i tuoi conti risultano riconciliati e aggiornati per **${rec.targetMonthName}**. Il Patrimonio Netto ufficiale consolidato è di **${this.formatCurrency(summary.netWorth)}**.`;
+      }
+    }
+
     if (q.includes('spend') || q.includes('giorno') || q.includes('budget') || q.includes('posso')) {
       return `📊 **Spesa Sicura Giornaliera**: puoi spendere fino a **${this.formatCurrency(budget.dailySafeSpend)} al giorno** per i restanti **${budget.daysRemaining} giorni** del mese senza intaccare la tua quota di risparmio del 25%.\n\nIl tuo budget per i bisogni è al momento saturo al **${budget.needs.pct}%**, mentre lo svago è al **${budget.wants.pct}%**.`;
     }
@@ -12716,6 +12929,490 @@ const financialAssistantService = new FinancialAssistantService();
 if (typeof window !== 'undefined') {
   window.FinancialAssistantServiceInstance = financialAssistantService;
 }
+
+// === js/components/monthlyClosingModal.js ===
+/**
+ * Apple Design System - Chiusura Fine Mese & Riconciliazione Saldi Studio
+ * Gestione guidata del conguaglio mensile e consolidamento Net Worth:
+ * - Supporto per Saldo Effettivo (conti bancari/investimento)
+ * - Supporto per Quota Aggiuntiva da Busta Paga (Fondo Pensione / Previdenza)
+ * - Calcolo automatico in tempo reale del Net Worth risultante
+ * - Notifiche e alert proattivi per conti rimasti fermi al mese precedente
+ */
+
+
+class MonthlyClosingModal {
+  constructor() {
+    this.targetMonth = null;
+    this.onSuccessCallback = null;
+    this.accountInputs = new Map(); // accId -> { mode: 'balance'|'delta', value: number, createTx: boolean, note: string }
+  }
+
+  formatCurrency(value) {
+    return new Intl.NumberFormat('it-IT', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      useGrouping: 'always'
+    }).format(value || 0);
+  }
+
+  open(options = {}) {
+    const modalRoot = document.getElementById('modal-container');
+    if (!modalRoot) return;
+
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const defaultMonth = `${String(curMonth).padStart(2, '0')}/${curYear}`;
+
+    this.targetMonth = options.targetMonth || defaultMonth;
+    this.onSuccessCallback = options.onSuccess || null;
+    this.focusAccount = options.focusAccount || null;
+
+    this.render(modalRoot);
+  }
+
+  close() {
+    const overlay = document.getElementById('monthly-closing-overlay');
+    if (overlay) {
+      overlay.classList.remove('open');
+      setTimeout(() => {
+        const modalRoot = document.getElementById('modal-container');
+        if (modalRoot) modalRoot.innerHTML = '';
+      }, 250);
+    }
+  }
+
+  render(modalRoot) {
+    const status = financeStore.getMonthlyReconciliationStatus(this.targetMonth);
+    const accounts = financeStore.getAccounts();
+    const currentNW = financeStore.summary.netWorth;
+
+    // Inizializza lo stato degli input se non presente
+    this.accountInputs.clear();
+    accounts.forEach(acc => {
+      const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension');
+      const defaultMode = acc.defaultMode || (isPension ? 'delta' : 'balance');
+      this.accountInputs.set(acc.name, {
+        mode: defaultMode,
+        rawInputValue: '',
+        value: 0,
+        isModified: false,
+        createTx: true,
+        note: isPension 
+          ? `Versamento Fondo Pensione Busta Paga (${status.targetMonthName})` 
+          : `Conguaglio Saldo ${acc.name} (${status.targetMonthName})`
+      });
+    });
+
+    const monthOptions = [
+      { key: '10/2026', label: 'Ottobre 2026' },
+      { key: '09/2026', label: 'Settembre 2026' },
+      { key: '08/2026', label: 'Agosto 2026' },
+      { key: '11/2026', label: 'Novembre 2026' }
+    ];
+
+    modalRoot.innerHTML = `
+      <div class="apple-modal-overlay open" id="monthly-closing-overlay">
+        <div class="apple-modal-sheet open" id="monthly-closing-sheet" style="max-width: 640px; width: 95%;">
+          <div class="modal-handle"></div>
+          
+          <div class="modal-header" style="margin-bottom: var(--space-box-gap-md);">
+            <div>
+              <div class="cluster-gap-xs" style="margin-bottom: 2px;">
+                <span style="color: var(--apple-blue);">${getIcon('conguaglio', 18)}</span>
+                <h3 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">Chiusura Fine Mese & Riconciliazione Saldi</h3>
+              </div>
+              <span style="font-size: 12.5px; color: var(--text-secondary);">
+                Consolida i saldi effettivi dei conti e registra le quote da busta paga per il Net Worth
+              </span>
+            </div>
+            <button class="modal-close-btn" id="btn-close-closing-modal">Chiudi</button>
+          </div>
+
+          <!-- Mese di Riferimento & Summary Live Strip -->
+          <div class="closing-summary-strip" style="background: var(--bg-hover); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-md);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="select-closing-month" style="font-size: 12.5px; font-weight: 600; color: var(--text-secondary);">Mese di Chiusura:</label>
+                <div class="apple-select-wrapper" style="min-width: 140px;">
+                  <select id="select-closing-month" class="apple-select" style="padding: 4px 28px 4px 10px; font-size: 13px; font-weight: 600; height: 32px;">
+                    ${monthOptions.map(m => `<option value="${m.key}" ${m.key === this.targetMonth ? 'selected' : ''}>${m.label}</option>`).join('')}
+                  </select>
+                  <svg class="select-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div id="closing-status-pill" style="font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 9999px; background: ${status.isFullyReconciled ? 'rgba(52, 199, 89, 0.15)' : 'rgba(255, 149, 0, 0.15)'}; color: ${status.isFullyReconciled ? 'var(--apple-green)' : 'var(--apple-orange)'};">
+                ${status.isFullyReconciled ? 'Tutti i conti allineati' : `${status.pendingCount} conto in sospeso`}
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
+              <div>
+                <span style="font-size: 11px; color: var(--text-tertiary); display: block; margin-bottom: 2px;">Net Worth Attuale</span>
+                <strong style="font-size: 15px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums;">
+                  ${this.formatCurrency(currentNW)}
+                </strong>
+              </div>
+              <div>
+                <span style="font-size: 11px; color: var(--text-tertiary); display: block; margin-bottom: 2px;">Nuovo Net Worth Stimato</span>
+                <strong id="preview-new-nw" style="font-size: 15px; font-weight: 700; color: var(--apple-blue); font-variant-numeric: tabular-nums;">
+                  ${this.formatCurrency(currentNW)}
+                </strong>
+              </div>
+              <div>
+                <span style="font-size: 11px; color: var(--text-tertiary); display: block; margin-bottom: 2px;">Variazione Netta</span>
+                <strong id="preview-nw-delta" style="font-size: 14px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums;">
+                  +0,00 €
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alert Promemoria Sezione Sospesi -->
+          ${status.staleAccounts.length > 0 ? `
+            <div style="display: flex; gap: 10px; align-items: flex-start; background: rgba(255, 149, 0, 0.1); border: 1px solid rgba(255, 149, 0, 0.3); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: var(--space-box-gap-md);">
+              <span style="color: var(--apple-orange); display: flex; align-items: center; margin-top: 1px;">${getIcon('warning', 18)}</span>
+              <div style="font-size: 12.5px; color: var(--text-primary); line-height: 1.4;">
+                <strong>Promemoria Fondo Pensione / Conti non aggiornati:</strong><br/>
+                ${status.staleAccounts.map(a => `Il conto <strong>${a.name}</strong> è fermo a ${a.lastMonthName}. Per il Fondo Pensione inserisci semplicemente la quota letta sul cedolino della busta paga.`).join('<br/>')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Lista Conti per Riconciliazione -->
+          <div class="closing-accounts-list" style="display: flex; flex-direction: column; gap: var(--space-box-gap-sm); max-height: 48vh; overflow-y: auto; padding-right: 4px; margin-bottom: var(--space-box-gap-md);">
+            ${accounts.map(acc => this.renderAccountRow(acc, status)).join('')}
+          </div>
+
+          <!-- Azioni di Chiusura -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: var(--space-box-gap-md); border-top: 1px solid var(--border-subtle);">
+            <button class="apple-btn-secondary" id="btn-cancel-closing">Annulla</button>
+            <button class="apple-btn-primary" id="btn-confirm-monthly-closing" style="padding: 10px 20px; font-size: 13.5px; font-weight: 600;">
+              ${getIcon('conguaglio', 14)}
+              <span>Conferma Chiusura e Salva Saldi [${status.targetMonthName}]</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    this.bindEvents(modalRoot);
+    this.updatePreviewCalculations();
+  }
+
+  renderAccountRow(acc, status) {
+    const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension');
+    const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
+    const isStale = (recMonth !== this.targetMonth);
+    const defaultMode = acc.defaultMode || (isPension ? 'delta' : 'balance');
+    const isFocused = this.focusAccount && this.focusAccount.toLowerCase() === acc.name.toLowerCase();
+
+    return `
+      <div class="reconcile-card ${isStale ? 'reconcile-stale' : ''} ${isFocused ? 'reconcile-focused' : ''}" data-account="${acc.name}" style="background: var(--bg-card); border: 1px solid ${isStale ? 'rgba(255, 149, 0, 0.4)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); padding: 14px 16px;">
+        
+        <!-- Header Conto -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--bg-hover); display: flex; align-items: center; justify-content: center; color: var(--apple-blue);">
+              ${getIcon(isPension ? 'savings' : 'wallet', 16)}
+            </div>
+            <div>
+              <strong style="font-size: 14px; font-weight: 600; color: var(--text-primary); display: block; line-height: 1.2;">
+                ${acc.name}
+              </strong>
+              <span style="font-size: 11.5px; color: var(--text-tertiary);">${acc.type || 'Conto'}</span>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 12px; color: var(--text-secondary);">Attuale:</span>
+            <strong class="privacy-mask" style="font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums;">
+              ${this.formatCurrency(acc.balance)}
+            </strong>
+            <span style="font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 9999px; background: ${isStale ? 'rgba(255, 149, 0, 0.15)' : 'rgba(52, 199, 89, 0.15)'}; color: ${isStale ? 'var(--apple-orange)' : 'var(--apple-green)'};">
+              ${isStale ? `Fermo a ${acc.lastMonthName || 'mese prec.'}` : 'Allineato'}
+            </span>
+          </div>
+        </div>
+
+        <!-- Selettore Modalità (Saldo Effettivo vs Quota Busta Paga) -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: var(--bg-hover); padding: 8px 12px; border-radius: var(--radius-sm); margin-bottom: 10px;">
+          <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Modalità Inserimento:</span>
+          
+          <div class="segmented-control-mini" style="display: inline-flex; background: var(--bg-primary); padding: 2px; border-radius: var(--radius-pill); border: 1px solid var(--border-subtle);">
+            <button type="button" class="seg-btn-mini ${defaultMode === 'delta' ? 'active' : ''}" data-mode="delta" data-target="${acc.name}" style="padding: 3px 10px; font-size: 11.5px; border-radius: var(--radius-pill); border: none; background: ${defaultMode === 'delta' ? 'var(--apple-blue)' : 'transparent'}; color: ${defaultMode === 'delta' ? '#FFFFFF' : 'var(--text-secondary)'}; font-weight: 600; cursor: pointer;">
+              ${isPension ? '➕ Quota Busta Paga (+/-)' : '➕ Differenza (+/-)'}
+            </button>
+            <button type="button" class="seg-btn-mini ${defaultMode === 'balance' ? 'active' : ''}" data-mode="balance" data-target="${acc.name}" style="padding: 3px 10px; font-size: 11.5px; border-radius: var(--radius-pill); border: none; background: ${defaultMode === 'balance' ? 'var(--apple-blue)' : 'transparent'}; color: ${defaultMode === 'balance' ? '#FFFFFF' : 'var(--text-secondary)'}; font-weight: 600; cursor: pointer;">
+              🎯 Saldo Effettivo Totale
+            </button>
+          </div>
+        </div>
+
+        <!-- Riga Input e Risultato Dinamico -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center;">
+          <div>
+            <label class="form-label" style="font-size: 11.5px; margin-bottom: 4px;" id="label-input-${acc.name}">
+              ${defaultMode === 'delta' ? (isPension ? 'Quota Busta Paga (€)' : 'Variazione Netta (€)') : 'Nuovo Saldo Effettivo (€)'}
+            </label>
+            <div style="position: relative;">
+              <input 
+                type="number" 
+                step="0.01" 
+                class="apple-input input-reconcile-val" 
+                id="input-val-${acc.name}" 
+                data-account="${acc.name}"
+                data-old-balance="${acc.balance}"
+                placeholder="${defaultMode === 'delta' ? (isPension ? '+ es. 185,50' : '+/- es. 50,00') : this.formatCurrency(acc.balance)}" 
+                style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;"
+              />
+            </div>
+          </div>
+
+          <div style="background: var(--bg-hover); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; justify-content: center;">
+            <span style="font-size: 11px; color: var(--text-tertiary); margin-bottom: 2px;">Saldo Risultante:</span>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <strong id="preview-acc-bal-${acc.name}" style="font-size: 14px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums;">
+                ${this.formatCurrency(acc.balance)}
+              </strong>
+              <span id="preview-acc-delta-${acc.name}" style="font-size: 11.5px; font-weight: 600; color: var(--text-tertiary);">
+                0,00 €
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Opzione Creazione Movimento -->
+        <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary);">
+          <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="check-tx-${acc.name}" data-account="${acc.name}" checked style="accent-color: var(--apple-blue);" />
+            <span>Crea movimento di conguaglio/versamento nel registro</span>
+          </label>
+          <span style="font-size: 11px; color: var(--text-tertiary);">
+            ${isPension ? 'Cat: 🛅 Livello Crescita' : 'Cat: ⚖️ Conguaglio'}
+          </span>
+        </div>
+
+      </div>
+    `;
+  }
+
+  bindEvents(modalRoot) {
+    // Chiudi Modal
+    const btnClose = document.getElementById('btn-close-closing-modal');
+    if (btnClose) btnClose.addEventListener('click', () => this.close());
+    const btnCancel = document.getElementById('btn-cancel-closing');
+    if (btnCancel) btnCancel.addEventListener('click', () => this.close());
+
+    const overlay = document.getElementById('monthly-closing-overlay');
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) this.close();
+      });
+    }
+
+    // Cambio Mese
+    const selectMonth = document.getElementById('select-closing-month');
+    if (selectMonth) {
+      selectMonth.addEventListener('change', (e) => {
+        this.targetMonth = e.target.value;
+        this.render(modalRoot);
+      });
+    }
+
+    // Toggle Modalità (Saldo Effettivo vs Quota Busta Paga) per ciascun conto
+    modalRoot.querySelectorAll('.seg-btn-mini').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const accName = e.currentTarget.dataset.target;
+        const newMode = e.currentTarget.dataset.mode;
+        const accData = this.accountInputs.get(accName);
+        if (!accData) return;
+
+        accData.mode = newMode;
+        
+        // Aggiorna classi bottoni
+        const parent = e.currentTarget.parentElement;
+        parent.querySelectorAll('.seg-btn-mini').forEach(b => {
+          const isActive = b.dataset.mode === newMode;
+          b.style.background = isActive ? 'var(--apple-blue)' : 'transparent';
+          b.style.color = isActive ? '#FFFFFF' : 'var(--text-secondary)';
+        });
+
+        // Aggiorna etichetta e placeholder input
+        const isPension = accName.toLowerCase().includes('pension');
+        const labelEl = document.getElementById(`label-input-${accName}`);
+        const inputEl = document.getElementById(`input-val-${accName}`);
+
+        if (labelEl) {
+          labelEl.textContent = newMode === 'delta' 
+            ? (isPension ? 'Quota Busta Paga (€)' : 'Variazione Netta (€)') 
+            : 'Nuovo Saldo Effettivo (€)';
+        }
+        if (inputEl) {
+          inputEl.placeholder = newMode === 'delta' 
+            ? (isPension ? '+ es. 185,50' : '+/- es. 50,00') 
+            : this.formatCurrency(parseFloat(inputEl.dataset.oldBalance));
+        }
+
+        this.updateAccountCalculation(accName);
+        this.updatePreviewCalculations();
+      });
+    });
+
+    // Input Numerici
+    modalRoot.querySelectorAll('.input-reconcile-val').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const accName = e.target.dataset.account;
+        const rawVal = e.target.value.trim();
+        const accData = this.accountInputs.get(accName);
+        if (!accData) return;
+
+        accData.rawInputValue = rawVal;
+        accData.value = rawVal === '' ? 0 : parseFloat(rawVal);
+        accData.isModified = rawVal !== '';
+
+        this.updateAccountCalculation(accName);
+        this.updatePreviewCalculations();
+      });
+    });
+
+    // Checkbox Transazione
+    modalRoot.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+      chk.addEventListener('change', (e) => {
+        const accName = e.target.dataset.account;
+        const accData = this.accountInputs.get(accName);
+        if (accData) {
+          accData.createTx = e.target.checked;
+        }
+      });
+    });
+
+    // Pulsante Conferma e Salva
+    const btnConfirm = document.getElementById('btn-confirm-monthly-closing');
+    if (btnConfirm) {
+      btnConfirm.addEventListener('click', () => {
+        this.handleSaveClosing();
+      });
+    }
+  }
+
+  updateAccountCalculation(accName) {
+    const accData = this.accountInputs.get(accName);
+    const inputEl = document.getElementById(`input-val-${accName}`);
+    const previewBalEl = document.getElementById(`preview-acc-bal-${accName}`);
+    const previewDeltaEl = document.getElementById(`preview-acc-delta-${accName}`);
+
+    if (!accData || !inputEl || !previewBalEl || !previewDeltaEl) return;
+
+    const oldBal = parseFloat(inputEl.dataset.oldBalance) || 0;
+    let resultingBal = oldBal;
+    let delta = 0;
+
+    if (accData.isModified && !isNaN(accData.value)) {
+      if (accData.mode === 'delta') {
+        delta = accData.value;
+        resultingBal = Math.round((oldBal + delta) * 100) / 100;
+      } else {
+        resultingBal = accData.value;
+        delta = Math.round((resultingBal - oldBal) * 100) / 100;
+      }
+    }
+
+    previewBalEl.textContent = this.formatCurrency(resultingBal);
+    
+    if (delta > 0) {
+      previewDeltaEl.textContent = `+${this.formatCurrency(delta)}`;
+      previewDeltaEl.style.color = 'var(--apple-green)';
+    } else if (delta < 0) {
+      previewDeltaEl.textContent = this.formatCurrency(delta);
+      previewDeltaEl.style.color = 'var(--apple-red)';
+    } else {
+      previewDeltaEl.textContent = '0,00 €';
+      previewDeltaEl.style.color = 'var(--text-tertiary)';
+    }
+  }
+
+  updatePreviewCalculations() {
+    const accounts = financeStore.getAccounts();
+    let totalEstimatedNW = 0;
+    let totalDelta = 0;
+
+    accounts.forEach(acc => {
+      const accData = this.accountInputs.get(acc.name);
+      const oldBal = parseFloat(acc.balance) || 0;
+      let finalBal = oldBal;
+
+      if (accData && accData.isModified && !isNaN(accData.value)) {
+        if (accData.mode === 'delta') {
+          finalBal = Math.round((oldBal + accData.value) * 100) / 100;
+        } else {
+          finalBal = accData.value;
+        }
+      }
+
+      totalEstimatedNW += finalBal;
+      totalDelta += (finalBal - oldBal);
+    });
+
+    const previewNwEl = document.getElementById('preview-new-nw');
+    const previewDeltaEl = document.getElementById('preview-nw-delta');
+
+    if (previewNwEl) {
+      previewNwEl.textContent = this.formatCurrency(totalEstimatedNW);
+    }
+    if (previewDeltaEl) {
+      if (totalDelta > 0) {
+        previewDeltaEl.textContent = `+${this.formatCurrency(totalDelta)}`;
+        previewDeltaEl.style.color = 'var(--apple-green)';
+      } else if (totalDelta < 0) {
+        previewDeltaEl.textContent = this.formatCurrency(totalDelta);
+        previewDeltaEl.style.color = 'var(--apple-red)';
+      } else {
+        previewDeltaEl.textContent = '+0,00 €';
+        previewDeltaEl.style.color = 'var(--text-secondary)';
+      }
+    }
+  }
+
+  handleSaveClosing() {
+    const updates = [];
+    const accounts = financeStore.getAccounts();
+
+    accounts.forEach(acc => {
+      const data = this.accountInputs.get(acc.name);
+      if (data && data.isModified && !isNaN(data.value)) {
+        updates.push({
+          accountName: acc.name,
+          mode: data.mode,
+          value: data.value,
+          note: data.note,
+          createTx: data.createTx
+        });
+      }
+    });
+
+    if (updates.length === 0) {
+      alert('Non hai inserito alcuna modifica o conguaglio. Per confermare, inserisci almeno la quota della busta paga o un saldo effettivo.');
+      return;
+    }
+
+    const res = financeStore.executeMonthlyClosing(this.targetMonth, updates);
+
+    // Mostra feedback visivo di successo
+    alert(`✅ Chiusura di ${res.monthName} consolidata con successo!\n\nPatrimonio Net Worth aggiornato a ${this.formatCurrency(res.newTotalNW)} (${res.nwDelta >= 0 ? '+' : ''}${this.formatCurrency(res.nwDelta)}).\n${res.modifiedAccounts.length} conti allineati.`);
+
+    this.close();
+
+    if (typeof this.onSuccessCallback === 'function') {
+      this.onSuccessCallback(res);
+    }
+  }
+}
+
+const monthlyClosingModal = new MonthlyClosingModal();
 
 // === js/components/dashboardView.js ===
 /**
@@ -12938,9 +13635,43 @@ class DashboardView {
       expenses: [920, 1140, 1080, 1350, 980, summary.monthlyExpense]
     };
 
+    const recStatus = financeStore.getMonthlyReconciliationStatus();
+
     container.innerHTML = `
       <div class="page dashboard-page">
         
+        <!-- Smart Alert: Chiusura Fine Mese & Riconciliazione Saldi -->
+        ${!recStatus.isFullyReconciled ? `
+          <div class="card monthly-closing-banner-card" style="border-left: 4px solid var(--apple-orange); background: var(--bg-card); margin-bottom: var(--space-box-gap-lg); padding: 18px 22px;">
+            <div style="display: flex; gap: var(--space-box-gap-md); align-items: flex-start; justify-content: space-between; flex-wrap: wrap;">
+              <div style="display: flex; gap: var(--space-box-gap-md); align-items: flex-start; flex: 1; min-width: min(100%, 280px);">
+                <div style="width: 38px; height: 38px; border-radius: var(--radius-md); background: rgba(255, 149, 0, 0.12); color: var(--apple-orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;">
+                  ${getIcon('warning', 20)}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                    <strong style="font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.015em;">
+                      Chiusura Mese di ${recStatus.targetMonthName} in Sospeso
+                    </strong>
+                    <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; background: rgba(255, 149, 0, 0.15); color: var(--apple-orange);">
+                      ${recStatus.pendingCount} conto da allineare
+                    </span>
+                  </div>
+                  <p style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: var(--lh-body);">
+                    ${recStatus.staleAccounts.map(a => `<strong>${a.name}</strong> è fermo a ${a.lastMonthName} (${this.formatCurrency(a.balance)})`).join(', ')}. Inserisci la quota da busta paga o il saldo effettivo per consolidare il Net Worth del mese.
+                  </p>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; align-self: center;">
+                <button class="apple-btn-primary btn-launch-monthly-closing" id="btn-dashboard-monthly-closing" style="padding: 9px 18px; font-size: 13px; font-weight: 600;">
+                  ${getIcon('conguaglio', 14)}
+                  <span>Chiudi Mese & Conguaglia</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
         <!-- 1. Top KPI Summary Grid -->
         <section class="grid-4">
           
@@ -13434,6 +14165,16 @@ class DashboardView {
     `;
 
     this.bindCategoryPeriodEvents(txs, categories);
+
+    const btnMonthlyClosing = container.querySelector('#btn-dashboard-monthly-closing');
+    if (btnMonthlyClosing) {
+      btnMonthlyClosing.addEventListener('click', () => {
+        monthlyClosingModal.open({
+          targetMonth: recStatus.targetMonth,
+          onSuccess: () => this.render(container)
+        });
+      });
+    }
 
     const expenseCard = container.querySelector('#dash-expense-kpi-card');
     if (expenseCard) {
@@ -17830,6 +18571,7 @@ class StoricoView {
     // Recupera la serie storica dinamica calcolata da baseline + movimenti + conguagli
     const rawData = financeStore.getHistoricalNetWorth();
     const summary = financeStore.summary;
+    const recStatus = financeStore.getMonthlyReconciliationStatus();
 
     // Filtra per anno se selezionato
     const filteredData = this.selectedYear === 'all' 
@@ -17886,9 +18628,9 @@ class StoricoView {
                 ${getIcon('savings', 13)}
                 <span>Backup JSON</span>
               </button>
-              <button class="apple-btn-secondary" id="btn-quick-conguaglio" style="font-size: 12px; padding: 7px 14px; border-radius: var(--radius-pill); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Apri riconciliazione saldi e conguagli">
-                ${getIcon('balance', 13)}
-                <span>Conguagli</span>
+              <button class="apple-btn-secondary" id="btn-quick-conguaglio" style="font-size: 12px; padding: 7px 14px; border-radius: var(--radius-pill); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; ${!recStatus.isFullyReconciled ? 'border-color: var(--apple-orange); color: var(--apple-orange); background: rgba(255, 149, 0, 0.08);' : ''}" title="Apri studio chiusura fine mese e conguaglio saldi">
+                ${getIcon('conguaglio', 13)}
+                <span>Chiusura Fine Mese ${!recStatus.isFullyReconciled ? `(${recStatus.pendingCount} in sospeso)` : ''}</span>
               </button>
             </div>
           </div>
@@ -17939,7 +18681,9 @@ class StoricoView {
 
                   let statusChip = '';
                   if (isCurrent) {
-                    statusChip = `<span class="status-chip chip-blue"><span class="live-dot"></span> In corso</span>`;
+                    statusChip = !recStatus.isFullyReconciled 
+                      ? `<span class="status-chip chip-orange"><span class="live-dot" style="background-color: var(--apple-orange);"></span> In sospeso (${recStatus.pendingCount})</span>`
+                      : `<span class="status-chip chip-blue"><span class="live-dot"></span> In corso</span>`;
                   } else if (isPositive) {
                     statusChip = `<span class="status-chip chip-green">Crescita</span>`;
                   } else {
@@ -17957,7 +18701,13 @@ class StoricoView {
                         ${diff !== 0 ? (isPositive ? '+' : '') + this.formatCurrency(diff) + ` (${diffPercent}%)` : '-'}
                       </td>
                       <td>
-                        ${statusChip}
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          ${statusChip}
+                          <button class="apple-btn-secondary btn-table-reconcile" data-month="${row.month}" style="padding: 2px 8px; font-size: 11px; border-radius: var(--radius-pill); cursor: pointer;" title="Apri riconciliazione e chiusura per ${row.month}">
+                            ${getIcon('conguaglio', 11)}
+                            <span>${isCurrent ? 'Chiudi' : 'Modifica'}</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   `;
@@ -18168,7 +18918,20 @@ class StoricoView {
     }
 
     document.getElementById('btn-quick-conguaglio')?.addEventListener('click', () => {
-      window.location.hash = '#impostazioni';
+      monthlyClosingModal.open({
+        targetMonth: recStatus.targetMonth,
+        onSuccess: () => this.render(container)
+      });
+    });
+
+    container.querySelectorAll('.btn-table-reconcile').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetMonth = e.currentTarget.dataset.month;
+        monthlyClosingModal.open({
+          targetMonth: targetMonth,
+          onSuccess: () => this.render(container)
+        });
+      });
     });
   }
 
@@ -18781,7 +19544,13 @@ class ImpostazioniView {
                 <h3>Gestione Conti & Saldi Iniziali</h3>
                 <span class="card-subtitle">Aggiungi, modifica o aggiorna i saldi dei tuoi conti e asset patrimoniali</span>
               </div>
-              <button class="apple-btn-secondary" id="btn-add-account-modal">+ Nuovo Conto</button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="apple-btn-secondary" id="btn-add-account-modal">+ Nuovo Conto</button>
+                <button class="apple-btn-primary" id="btn-open-closing-studio" style="font-size: 13px; padding: 8px 16px;">
+                  ${getIcon('conguaglio', 14)}
+                  <span>Chiusura Fine Mese & Conguagli</span>
+                </button>
+              </div>
             </div>
 
             <div class="accounts-manager-list">
@@ -19231,6 +20000,16 @@ class ImpostazioniView {
       });
     }
 
+    // Studio Chiusura Fine Mese & Conguagli
+    const btnClosingStudio = document.getElementById('btn-open-closing-studio');
+    if (btnClosingStudio) {
+      btnClosingStudio.addEventListener('click', () => {
+        monthlyClosingModal.open({
+          onSuccess: () => this.render(container)
+        });
+      });
+    }
+
     // Aggiornamento Saldo Conto Inline con Conguaglio Apple
     container.querySelectorAll('.apple-btn-save-inline').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -19244,12 +20023,10 @@ class ImpostazioniView {
           if (Math.abs(newBal - acc.balance) > 0.001) {
             this.openConguaglioModal(acc, newBal, container);
           } else {
-            btn.textContent = '✓ Salvato';
-            btn.style.color = 'var(--apple-green)';
-            setTimeout(() => {
-              btn.textContent = 'Aggiorna';
-              btn.style.color = '';
-            }, 1200);
+            monthlyClosingModal.open({
+              focusAccount: acc.name,
+              onSuccess: () => this.render(container)
+            });
           }
         }
       });

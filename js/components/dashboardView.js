@@ -5,6 +5,7 @@
 
 import { financeStore } from '../data/mockData.js';
 import { getCategoryIcon, cleanCategoryName, getIcon } from './icons.js';
+import { monthlyClosingModal } from './monthlyClosingModal.js';
 
 export class DashboardView {
   constructor() {
@@ -220,9 +221,43 @@ export class DashboardView {
       expenses: [920, 1140, 1080, 1350, 980, summary.monthlyExpense]
     };
 
+    const recStatus = financeStore.getMonthlyReconciliationStatus();
+
     container.innerHTML = `
       <div class="page dashboard-page">
         
+        <!-- Smart Alert: Chiusura Fine Mese & Riconciliazione Saldi -->
+        ${!recStatus.isFullyReconciled ? `
+          <div class="card monthly-closing-banner-card" style="border-left: 4px solid var(--apple-orange); background: var(--bg-card); margin-bottom: var(--space-box-gap-lg); padding: 18px 22px;">
+            <div style="display: flex; gap: var(--space-box-gap-md); align-items: flex-start; justify-content: space-between; flex-wrap: wrap;">
+              <div style="display: flex; gap: var(--space-box-gap-md); align-items: flex-start; flex: 1; min-width: min(100%, 280px);">
+                <div style="width: 38px; height: 38px; border-radius: var(--radius-md); background: rgba(255, 149, 0, 0.12); color: var(--apple-orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;">
+                  ${getIcon('warning', 20)}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                    <strong style="font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.015em;">
+                      Chiusura Mese di ${recStatus.targetMonthName} in Sospeso
+                    </strong>
+                    <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; background: rgba(255, 149, 0, 0.15); color: var(--apple-orange);">
+                      ${recStatus.pendingCount} conto da allineare
+                    </span>
+                  </div>
+                  <p style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: var(--lh-body);">
+                    ${recStatus.staleAccounts.map(a => `<strong>${a.name}</strong> è fermo a ${a.lastMonthName} (${this.formatCurrency(a.balance)})`).join(', ')}. Inserisci la quota da busta paga o il saldo effettivo per consolidare il Net Worth del mese.
+                  </p>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; align-self: center;">
+                <button class="apple-btn-primary btn-launch-monthly-closing" id="btn-dashboard-monthly-closing" style="padding: 9px 18px; font-size: 13px; font-weight: 600;">
+                  ${getIcon('conguaglio', 14)}
+                  <span>Chiudi Mese & Conguaglia</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
         <!-- 1. Top KPI Summary Grid -->
         <section class="grid-4">
           
@@ -716,6 +751,16 @@ export class DashboardView {
     `;
 
     this.bindCategoryPeriodEvents(txs, categories);
+
+    const btnMonthlyClosing = container.querySelector('#btn-dashboard-monthly-closing');
+    if (btnMonthlyClosing) {
+      btnMonthlyClosing.addEventListener('click', () => {
+        monthlyClosingModal.open({
+          targetMonth: recStatus.targetMonth,
+          onSuccess: () => this.render(container)
+        });
+      });
+    }
 
     const expenseCard = container.querySelector('#dash-expense-kpi-card');
     if (expenseCard) {

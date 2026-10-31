@@ -34,8 +34,9 @@
 | **Assistente AI** | 💎 Rilasciato | **Personal CFO & FinTech Advisor (`#assistente`)**: Briefing esecutivo a 4 card KPI (Radar Anomalie, Runway Fondo Emergenza XEON, Allocazione Surplus & Ottimizzazione Fiscale Art. 51 TUIR, Proiezione F.I.R.E.), chat conversazionale stile Apple Intelligence con **Auto-Reset Intelligente** (TTL inattività 15 minuti, rolling memory a max 12 messaggi per zero sovraccarico del browser, badge `Auto-reset 15m` e pulsante dedicato `Nuova Chat`), quick prompt pills one-click e motore decisionale locale deterministico con 100% privacy e latenza zero. |
 | **Movimenti** | 💎 Perfezionato | **Header Dinamico Apple & Sotto-Menu Segmentato Integrato**: Allineamento integrale allo standard grafico di Spese ed Investimenti. Testata di sezione con badge, riga chip con metriche live del mese (`Entrate`, `Uscite`, `Netto`, conteggio transazioni), titolo (`.page-title`) e sottotitolo (`.page-subtitle`) dinamico contestuale per le 4 sotto-aree (*Registro Movimenti*, *Analisi Categorie*, *Confronto Categorie*, *Budget 50/30/20*). Apple Segmented Control integrato (`.movimenti-segmented-tabs`) a 4 colonne con icone SF Symbols. Pulsante primario *"Nuovo Movimento"* ed *"Esporta CSV"* nella testata. Card filtri/comandi riorganizzata ad alto respiro con search input spazioso, view switcher affiancato e selettori armonici. |
 | **Investimenti** | 💎 Perfezionato | **Header Dinamico Stile Spese & Sotto-Menu Segmentato Apple**: Header di sezione con chip patrimoniali (`Investito`, `Net Worth`), titolo (`.page-title`) e sottotitolo (`.page-subtitle`) dinamico per ciascuna delle 4 aree (*Portafoglio & Allocazione*, *Profilo di Rischio & Target*, *Obiettivi di Risparmio*, *Indipendenza Finanziaria F.I.R.E.*). Sotto-menu segmentato Apple (`.investimenti-segmented-tabs`) integrato nel layout (4 colonne desktop, 2 colonne tablet, swipe fluido mobile) con icone SF Symbols. Simulatore PAC, Profilo MiFID, Salvadanai e simulatore Crossover Point 4% SWR armonizzati a 0 sovrapposizioni. |
-| **Storico** | 💎 Perfezionato | Container unificato `.page.storico-page`. Banner Net Worth dinamico continuo come `.card.highlight-card` a 4 zone, grafico evoluzione in `.card` standard, tabella mensile strutturata in `.card`, **Report Fiscale Annuale Stampabile** (Art. 51 TUIR, ISEE) ed export CSV/JSON. Toolbar ripulita con icone SVG monocromatiche. |
-| **Impostazioni** | 💎 Perfezionato | Container unificato `.page.impostazioni-page`. Tutte le sezioni (Google Sheets API, Token, Conguaglio Saldi, Smart Merge categorie, PIN blocco iOS) strutturate in `.card` canoniche con gap 24px. Rimosse emoji residue e unificati indicatori di stato. |
+| **Storico** | 💎 Perfezionato | Container unificato `.page.storico-page`. Banner Net Worth dinamico continuo come `.card.highlight-card` a 4 zone, grafico evoluzione in `.card` standard, tabella mensile strutturata in `.card`, **Report Fiscale Annuale Stampabile** (Art. 51 TUIR, ISEE) ed export CSV/JSON. Toolbar ripulita con icone SVG monocromatiche. Integrato pulsante e trigger rapido per la Chiusura Fine Mese. |
+| **Impostazioni** | 💎 Perfezionato | Container unificato `.page.impostazioni-page`. Tutte le sezioni (Google Sheets API, Token, Conguaglio Saldi, Smart Merge categorie, PIN blocco iOS) strutturate in `.card` canoniche con gap 24px. Rimosse emoji residue e unificati indicatori di stato. Collegato allo Studio di Chiusura Fine Mese. |
+| **Chiusura Mese & Conguagli** | 💎 Perfezionato | **Studio Chiusura Mese & Riconciliazione Saldi**: Gestione duplice modalità (*Saldo Effettivo Totale* per banche/investimenti vs *Quota Busta Paga +/-* per Fondo Pensione/Previdenza). Banner smart con allerta automatica proattiva se un conto è fermo al mese precedente, modale Studio Apple con anteprima live del Net Worth, registrazione automatica della transazione/rettifica nel ledger e sincronizzazione con Google Sheets. Certificato a 0 difetti su 5 viewport. |
 | **Sistema Globale** | 💎 Perfezionato | **Design System Centrale, Icons.js & uiComponents.js**: Libreria condivisa di componenti canonici, catalogo iconografico SVG lineare Apple SF Symbols, scala spaziale rigorosa (4, 8, 12, 16, 24, 32, 48, 64 px), gap e stacco 24px, clearance header 24px, contrasto WCAG AA ≥ 4.5:1, numeri tabulari, bundle standalone validato con JavaScriptCore. |
 
 ---
@@ -46,6 +47,38 @@ Ogni nuova idea segue questo ciclo di vita:
 `[IDEA]` ➔ `[IN SVILUPPO]` ➔ `[TEST LOCALE]` ➔ `[APPROVATO]` ➔ `[MERGE MAIN]`
 
 ### 📌 Voci di Registro
+
+- **[TEST LOCALE] Studio Chiusura Fine Mese & Riconciliazione Saldi Intelligente (v2026.17-beta)**:
+  - **Requisito & Analisi del Flusso Gestionale di Giorgio**:
+    - Nel workflow originario su Google Sheets (fogli 2024, 2025, 2026), Giorgio effettua la riconciliazione di fine mese distinguendo due casistiche operative radicalmente differenti:
+      1. *Saldo Effettivo Totale*: per conti correnti e liquidità (es. Buddybank) o fondi monetari/ETF (XEON, VWCE), in cui inserisce direttamente l'ammontare letto sull'app bancaria/broker.
+      2. *Differenza Aggiuntiva / Quota Busta Paga (+/-)*: per il Fondo Pensione (Previdenza Complementare), in cui non calcola a mano il montante complessivo ma riporta esclusivamente la quota contributiva mensile incrementale letta sul cedolino della busta paga.
+    - Inoltre, l'applicazione non disponeva di alert proattivi che segnalassero se un conto fosse rimasto disallineato o fermo al mese precedente (es. Fondo Pensione fermo a Settembre 2026 rispetto ad Ottobre 2026).
+  - **Implementazione Architetturale & Ingegneristica**:
+    1. *Data Model & State Engine (`realData.js` e `mockData.js`)*:
+       - Esteso lo schema dei conti con i campi `lastReconciledMonth` (es. `'09/2026'`), `lastReconciledDate` e `defaultMode` (`'delta'` per Fondo Pensione, `'balance'` per conti correnti e investimenti).
+       - Migrazione trasparente automatica dello stato in `localStorage` in fase di boot senza perdita dei dati esistenti.
+       - Funzione `getMonthlyReconciliationStatus(targetMonthKey)`: verifica la completezza dell'allineamento dei saldi per il mese di riferimento e individua con precisione i conti arretrati (`staleAccounts`).
+       - Funzione `executeMonthlyClosing(targetMonthKey, updates, options)`: esegue la chiusura atomica del mese supportando in modo nativo la modalità *delta* (somma algebrica del cedolino) e *balance* (nuovo saldo assoluto), genera la scrittura contabile nel registro transazioni (es. *"Versamento Fondo Pensione Busta Paga (Ottobre 2026)"* sotto la categoria *"Livello Crescita"* o *"Conguaglio / Rettifica"*), aggiorna Google Sheets e congela lo snapshot di Net Worth.
+    2. *Studio Modale Apple Chiusura Mese (`js/components/monthlyClosingModal.js`)*:
+       - Modale interattiva nativa Apple HIG (`.apple-modal`) con selettore mese (`Ottobre 2026`, `Settembre 2026`, etc.).
+       - Card per ciascun conto con badge di freschezza (`Aggiornato a Ottobre` vs `Fermo a Settembre`).
+       - Apple Segmented Control per ciascun conto: switch istantaneo tra `[ ➕ Quota Busta Paga (+/-) ]` e `[ 🎯 Saldo Effettivo Totale ]`, preimpostato in modo intelligente sul tipo di conto.
+       - Calcolo real-time del nuovo saldo risultante, della variazione netta e dell'impatto sul Net Worth complessivo.
+       - Checkbox con nota personalizzabile per registrare opzionalmente il movimento contabile nel ledger.
+    3. *Banner Alert Proattivo Apple in Dashboard (`js/components/dashboardView.js`)*:
+       - Banner ad alto contrasto con stile Apple HIG posizionato in cima alla Dashboard: segnala immediatamente se la chiusura del mese corrente è in sospeso (es. *"⚠️ Chiusura Mese di Ottobre 2026 in Sospeso: 1 conto da allineare (Fondo Pensione: fermo a Settembre 2026)"*).
+       - Pulsante one-click *"Esegui Chiusura"* che apre istantaneamente lo studio preconfigurato.
+    4. *Punti di Accesso Integrati in Tutta la WebApp*:
+       - **Dashboard**: Banner di allerta smart prioritario.
+       - **Storico**: Pulsante rapido *"Chiusura Mese"* nella toolbar con badge numerico dei conti in sospeso, e pulsante *"Conguaglia"* in ogni riga della tabella mensile.
+       - **Impostazioni**: Pulsante *"Studio Chiusura Fine Mese"* nella card Gestione Conti e link diretto dai tasti conguaglio rapido.
+       - **Assistente AI CFO (`financialAssistantService.js`)**: Briefing esecutivo aggiornato con warning esplicito se vi sono conti da riconciliare, con supporto a prompt conversazionali dedicati ("come faccio il conguaglio", "chiudi mese", "fondo pensione busta paga").
+    5. *Design System & Resilienza Layout (`css/apple-design.css`)*:
+       - Nessuna collisione: layout a schede fluide, input monetari formattati con font tabulare SF Pro, supporto completo alla privacy mode (sfocatura automatica dei saldi durante le presentazioni).
+  - **Validazione & Certificazione**:
+    - Audit Layout Multi-Viewport (`scripts/audit_layout.py`) eseguito su 5 viewport (iPhone SE 320px, iPhone 8 375px, iPad Mini 768px, MacBook 1280px, Full HD 1920px) su tutte le 9 viste: **Totale difetti rilevati = 0**.
+    - Compilazione standalone bundle `js/app.bundle.js` completata e validata con Apple JavaScriptCore (JSC) a 0 errori. [2026-10-31]
 
 - **[MERGE MAIN] Architettura Multi-Ambiente & Isolamento Produzione/Beta (Release v2026.16)**:
   - **Autorizzazione & Requisito**: Giorgio ha formalizzato il principio costitutivo: il ramo `main` (produzione) deve sincronizzarsi direttamente con Google Sheets senza alcun blocco, mentre il ramo `beta` (sviluppo) deve sfruttare automaticamente la Sandbox per proteggere il database reale da modifiche durante i test.

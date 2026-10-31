@@ -9,6 +9,7 @@
 import { financeStore } from '../data/mockData.js';
 import { googleSheetsService } from '../services/googleSheetsService.js';
 import { getIcon } from './icons.js';
+import { monthlyClosingModal } from './monthlyClosingModal.js';
 
 export class ImpostazioniView {
   constructor() {
@@ -58,7 +59,13 @@ export class ImpostazioniView {
                 <h3>Gestione Conti & Saldi Iniziali</h3>
                 <span class="card-subtitle">Aggiungi, modifica o aggiorna i saldi dei tuoi conti e asset patrimoniali</span>
               </div>
-              <button class="apple-btn-secondary" id="btn-add-account-modal">+ Nuovo Conto</button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="apple-btn-secondary" id="btn-add-account-modal">+ Nuovo Conto</button>
+                <button class="apple-btn-primary" id="btn-open-closing-studio" style="font-size: 13px; padding: 8px 16px;">
+                  ${getIcon('conguaglio', 14)}
+                  <span>Chiusura Fine Mese & Conguagli</span>
+                </button>
+              </div>
             </div>
 
             <div class="accounts-manager-list">
@@ -508,6 +515,16 @@ export class ImpostazioniView {
       });
     }
 
+    // Studio Chiusura Fine Mese & Conguagli
+    const btnClosingStudio = document.getElementById('btn-open-closing-studio');
+    if (btnClosingStudio) {
+      btnClosingStudio.addEventListener('click', () => {
+        monthlyClosingModal.open({
+          onSuccess: () => this.render(container)
+        });
+      });
+    }
+
     // Aggiornamento Saldo Conto Inline con Conguaglio Apple
     container.querySelectorAll('.apple-btn-save-inline').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -521,12 +538,10 @@ export class ImpostazioniView {
           if (Math.abs(newBal - acc.balance) > 0.001) {
             this.openConguaglioModal(acc, newBal, container);
           } else {
-            btn.textContent = '✓ Salvato';
-            btn.style.color = 'var(--apple-green)';
-            setTimeout(() => {
-              btn.textContent = 'Aggiorna';
-              btn.style.color = '';
-            }, 1200);
+            monthlyClosingModal.open({
+              focusAccount: acc.name,
+              onSuccess: () => this.render(container)
+            });
           }
         }
       });
