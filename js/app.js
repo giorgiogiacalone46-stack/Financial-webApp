@@ -5,6 +5,8 @@
 
 import { DashboardView } from './components/dashboardView.js';
 import { MovimentiView } from './components/movimentiView.js';
+import { SpeseView } from './components/speseView.js';
+import { AssistenteView } from './components/assistenteView.js';
 import { InvestimentiView } from './components/investimentiView.js';
 import { StoricoView } from './components/storicoView.js';
 import { ImpostazioniView } from './components/impostazioniView.js';
@@ -16,6 +18,11 @@ const VIEWS = {
     id: 'dashboard',
     title: 'Dashboard',
     subtitle: 'Panoramica finanziaria e indicatori chiave'
+  },
+  spese: {
+    id: 'spese',
+    title: 'Spese & Budget',
+    subtitle: 'Analisi avanzata uscite, buste 50/30/20 e merchant'
   },
   movimenti: {
     id: 'movimenti',
@@ -32,6 +39,11 @@ const VIEWS = {
     title: 'Storico Patrimonio',
     subtitle: 'Evoluzione Net Worth 2024 - 2026'
   },
+  assistente: {
+    id: 'assistente',
+    title: 'Assistente Finanziario',
+    subtitle: 'Personal CFO, runway, ottimizzazione fiscale & analisi proattiva'
+  },
   impostazioni: {
     id: 'impostazioni',
     title: 'Configurazione & Conti',
@@ -43,6 +55,8 @@ class AppController {
   constructor() {
     this.currentTab = 'dashboard';
     this.dashboardView = new DashboardView();
+    this.speseView = new SpeseView();
+    this.assistenteView = new AssistenteView();
     this.movimentiView = new MovimentiView();
     this.investimentiView = new InvestimentiView();
     this.storicoView = new StoricoView();
@@ -54,6 +68,10 @@ class AppController {
   init() {
     this.renderDate();
     googleSheetsService.updateStatusBadge();
+
+    if (financeStore.isPrivacyMode()) {
+      document.body.classList.add('privacy-mode');
+    }
 
     // Se il PIN è attivo, mostra schermata di sblocco Apple
     if (!this.isUnlocked) {
@@ -120,10 +138,31 @@ class AppController {
     this.bindEvents();
 
     const rawHash = window.location.hash.replace('#', '');
-    const tabName = rawHash.split('-')[0].split('?')[0];
+    const parts = rawHash.split('-');
+    const tabName = parts[0].split('?')[0];
+    const subtab = parts[1] ? parts[1].split('?')[0] : null;
     const initialTab = VIEWS[tabName] ? tabName : 'dashboard';
 
-    this.switchTab(initialTab);
+    if (subtab) {
+      if (initialTab === 'movimenti') this.movimentiView.activeSubtab = subtab;
+      else if (initialTab === 'investimenti') this.investimentiView.activeSubtab = subtab;
+    }
+
+    this.switchTab(initialTab, subtab);
+
+    window.addEventListener('hashchange', () => {
+      const currentRaw = window.location.hash.replace('#', '');
+      const curParts = currentRaw.split('-');
+      const curTab = curParts[0].split('?')[0];
+      const curSub = curParts[1] ? curParts[1].split('?')[0] : null;
+      if (VIEWS[curTab]) {
+        if (curSub) {
+          if (curTab === 'movimenti') this.movimentiView.activeSubtab = curSub;
+          else if (curTab === 'investimenti') this.investimentiView.activeSubtab = curSub;
+        }
+        this.switchTab(curTab, curSub);
+      }
+    });
 
     // Auto-sync al boot se configurato
     if (googleSheetsService.isConfigured() && googleSheetsService.autoSync) {
@@ -137,6 +176,8 @@ class AppController {
           }
           const container = document.getElementById('main-viewport');
           if (this.currentTab === 'dashboard') this.dashboardView.render(container);
+          else if (this.currentTab === 'spese') this.speseView.render(container);
+          else if (this.currentTab === 'assistente') this.assistenteView.render(container);
           else if (this.currentTab === 'movimenti') this.movimentiView.render(container);
           else if (this.currentTab === 'investimenti') this.investimentiView.render(container);
           else if (this.currentTab === 'storico') this.storicoView.render(container);
@@ -146,6 +187,18 @@ class AppController {
   }
 
   bindEvents() {
+    const togglePrivacy = () => {
+      const isNow = !financeStore.isPrivacyMode();
+      financeStore.setPrivacyMode(isNow);
+      document.body.classList.toggle('privacy-mode', isNow);
+    };
+
+    const dPrivacyBtn = document.getElementById('privacy-toggle-btn');
+    if (dPrivacyBtn) dPrivacyBtn.addEventListener('click', togglePrivacy);
+
+    const mPrivacyBtn = document.getElementById('mobile-privacy-toggle-btn');
+    if (mPrivacyBtn) mPrivacyBtn.addEventListener('click', togglePrivacy);
+
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const tab = e.currentTarget.dataset.tab;
@@ -161,10 +214,15 @@ class AppController {
     });
   }
 
-  switchTab(tabId) {
+  switchTab(tabId, subtab = null) {
     if (!VIEWS[tabId]) return;
     this.currentTab = tabId;
     const viewData = VIEWS[tabId];
+
+    if (subtab) {
+      if (tabId === 'movimenti') this.movimentiView.activeSubtab = subtab;
+      else if (tabId === 'investimenti') this.investimentiView.activeSubtab = subtab;
+    }
 
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === tabId);
@@ -179,7 +237,10 @@ class AppController {
     if (titleEl) titleEl.textContent = viewData.title;
     if (subtitleEl) subtitleEl.textContent = viewData.subtitle;
 
-    window.location.hash = tabId;
+    const targetHash = subtab ? `${tabId}-${subtab}` : tabId;
+    if (window.location.hash.replace('#', '') !== targetHash) {
+      window.location.hash = targetHash;
+    }
 
     const container = document.getElementById('main-viewport');
     if (!container) return;
@@ -189,9 +250,14 @@ class AppController {
     this.dashboardView.destroyCharts();
     this.investimentiView.destroyCharts();
     this.storicoView.destroyCharts();
+    this.speseView.destroyCharts();
 
     if (tabId === 'dashboard') {
       this.dashboardView.render(container);
+    } else if (tabId === 'spese') {
+      this.speseView.render(container);
+    } else if (tabId === 'assistente') {
+      this.assistenteView.render(container);
     } else if (tabId === 'movimenti') {
       this.movimentiView.render(container);
     } else if (tabId === 'investimenti') {
@@ -201,6 +267,55 @@ class AppController {
     } else if (tabId === 'impostazioni') {
       this.impostazioniView.render(container);
     }
+
+    if (window.location.hash.includes('audit') || window.location.search.includes('audit')) {
+      setTimeout(() => this.runLayoutAudit(), 100);
+    }
+  }
+
+  runLayoutAudit() {
+    try {
+      const issues = [];
+      const winW = window.innerWidth;
+      const docScrollW = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+      if (docScrollW > winW + 2) {
+        issues.push({
+          type: 'HORIZONTAL_SCROLL',
+          msg: `Page scrollWidth (${docScrollW}px) exceeds viewport (${winW}px)`
+        });
+      }
+
+      document.querySelectorAll('body *').forEach(el => {
+        if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
+
+        const rect = el.getBoundingClientRect();
+        if (rect.right > winW + 4 && !['svg', 'path', 'g', 'defs', 'clippath'].includes(el.tagName.toLowerCase())) {
+          let parent = el.parentElement;
+          let hasScrollParent = false;
+          while (parent && parent !== document.body) {
+            const pStyle = window.getComputedStyle(parent);
+            if (pStyle.overflowX === 'auto' || pStyle.overflowX === 'scroll' || pStyle.overflowX === 'hidden') {
+              hasScrollParent = true;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          if (!hasScrollParent) {
+            issues.push({
+              type: 'OVERFLOW_BOUNDS',
+              tag: el.tagName.toLowerCase(),
+              cls: el.className ? String(el.className).substring(0, 30) : '',
+              right: Math.round(rect.right),
+              winW: winW
+            });
+          }
+        }
+      });
+
+      document.title = 'AUDIT:' + JSON.stringify({ winW, docScrollW, issuesCount: issues.length, issues });
+    } catch(e) {}
   }
 
   renderDate() {

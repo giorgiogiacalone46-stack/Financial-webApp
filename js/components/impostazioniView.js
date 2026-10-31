@@ -8,6 +8,7 @@
 
 import { financeStore } from '../data/mockData.js';
 import { googleSheetsService } from '../services/googleSheetsService.js';
+import { getIcon } from './icons.js';
 
 export class ImpostazioniView {
   constructor() {
@@ -31,7 +32,7 @@ export class ImpostazioniView {
     const isPinActive = financeStore.isPinEnabled();
 
     container.innerHTML = `
-      <div class="impostazioni-layout">
+      <div class="page impostazioni-page">
 
         <!-- Sotto-navigazione Cupertino Tabs -->
         <div class="settings-subtabs-nav">
@@ -90,7 +91,7 @@ export class ImpostazioniView {
 
             <!-- Form rapido aggiungi categoria -->
             <div class="add-cat-bar">
-              <input type="text" id="new-cat-name" class="apple-input" placeholder="Es. ✈️ Viaggi, 🎮 Gaming, 👕 Shopping..." />
+              <input type="text" id="new-cat-name" class="apple-input" placeholder="Es. Viaggi, Gaming, Abbigliamento..." />
               <div class="apple-select-wrapper">
                 <select id="new-cat-type" class="apple-select">
                   <option value="expense">Uscita</option>
@@ -111,6 +112,49 @@ export class ImpostazioniView {
                 </div>
               `).join('')}
             </div>
+
+            <!-- Smart Merge: Accorpamento Categorie Simili -->
+            <div class="merge-categories-card">
+              <h4>Accorpamento Intelligente Categorie (Smart Merge)</h4>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: var(--space-text-eyebrow); line-height: var(--lh-body);">
+                Unisci due categorie simili (es. "Spesa" in "Alimentari"). Tutti i movimenti passati verranno convertiti automaticamente.
+              </p>
+              <div class="merge-row-controls">
+                <div class="apple-select-wrapper">
+                  <select id="merge-source-cat" class="apple-select">
+                    <option value="" disabled selected>Categoria da unire...</option>
+                    ${categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+                  </select>
+                  <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+                <span style="font-weight: 700; color: var(--apple-blue); font-size: 14px;">➔</span>
+                <div class="apple-select-wrapper">
+                  <select id="merge-target-cat" class="apple-select">
+                    <option value="" disabled selected>Unisci dentro...</option>
+                    ${categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+                  </select>
+                  <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+                <button class="apple-btn-secondary" id="btn-merge-categories">Accorpa</button>
+              </div>
+            </div>
+
+            <!-- Regole di Auto-Categorizzazione Smart -->
+            <div class="merge-categories-card" style="margin-top: var(--space-box-gap-md);">
+              <h4>Regole di Auto-Categorizzazione (Smart Rules)</h4>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: var(--space-text-eyebrow); margin-bottom: var(--space-text-sub); line-height: var(--lh-body);">
+                Quando inserisci un movimento, queste parole chiave compilano automaticamente la categoria appropriata:
+              </p>
+              <div class="cluster-gap-xs">
+                ${financeStore.getSmartRules().slice(0, 16).map(r => `
+                  <span style="background: var(--bg-card); padding: 4px 10px; border-radius: var(--radius-pill); font-size: 11px; border: 1px solid var(--border-subtle); display: inline-flex; align-items: center; gap: 4px;">
+                    <strong style="color: var(--apple-blue);">${r.keyword}</strong> ➔ ${r.category}
+                  </span>
+                `).join('')}
+                <span style="font-size: 11px; color: var(--text-tertiary); align-self: center;">+ altre ${financeStore.getSmartRules().length - 16} regole attive</span>
+              </div>
+            </div>
+
           </section>
         ` : ''}
 
@@ -126,16 +170,16 @@ export class ImpostazioniView {
 
             <div class="pin-config-box">
               <div class="pin-status-banner ${isPinActive ? 'active' : ''}">
-                <div class="pin-status-icon">🔒</div>
+                <div class="pin-status-icon" style="color: var(--apple-blue); display: flex; align-items: center; justify-content: center;">${getIcon('lock', 24)}</div>
                 <div>
                   <strong>${isPinActive ? 'Protezione PIN Attiva' : 'Nessun PIN Configurato'}</strong>
                   <p>${isPinActive ? 'All\'apertura della web app viene richiesto il codice di sblocco a 4 cifre.' : 'La web app si apre direttamente senza richiedere codici.'}</p>
                 </div>
               </div>
 
-              <div class="form-group" style="margin-top: 16px;">
+              <div class="form-group" style="margin-top: var(--space-box-gap-md);">
                 <label class="form-label" for="input-security-pin">Imposta o Cambia Codice PIN (4 cifre)</label>
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div class="cluster-gap-sm">
                   <input type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" id="input-security-pin" class="apple-input apple-input-lg" placeholder="••••" value="${financeStore.getPin()}" style="max-width: 140px; letter-spacing: 6px; text-align: center; font-size: 20px;" />
                   <button class="apple-btn-primary" id="btn-save-pin">Salva PIN</button>
                   ${isPinActive ? `<button class="apple-btn-secondary" id="btn-remove-pin">Rimuovi PIN</button>` : ''}
@@ -155,8 +199,24 @@ export class ImpostazioniView {
               </div>
               <span class="sheet-status-badge">
                 <span class="sheet-status-indicator" style="width: 8px; height: 8px;"></span>
-                <span class="sheet-status-desc">${config.isConfigured ? 'Connesso' : 'Pronto (Locale)'}</span>
+                <span class="sheet-status-desc">${googleSheetsService.isSandboxMode() ? 'Sandbox Protetto' : (config.isConfigured ? 'Connesso' : 'Pronto (Locale)')}</span>
               </span>
+            </div>
+
+            <!-- Apple Sandbox Shield Banner -->
+            <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
+              <div style="color: var(--apple-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
+                ${getIcon('shield', 26)}
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div class="cluster-gap-xs mb-text-title">
+                  <strong style="color: var(--apple-green); font-size: 14px; font-weight: 600;">Protezione Database Reale Attiva (Beta Sandbox)</strong>
+                  <span style="background: rgba(52, 199, 89, 0.2); color: var(--apple-green); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Zero Scritture su Google Sheets</span>
+                </div>
+                <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
+                  In questa versione di prova, tutte le operazioni (creazione o eliminazione di movimenti, conguagli saldi, nuovi obiettivi o accorpamento categorie) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong>. Nessuna operazione di scrittura o cancellazione viene inviata al tuo foglio Google Sheets reale originale.
+                </p>
+              </div>
             </div>
 
             <div class="settings-form-group">
@@ -298,6 +358,108 @@ export class ImpostazioniView {
     }
   }
 
+  openConguaglioModal(acc, newBal, container) {
+    const modalRoot = document.getElementById('modal-container');
+    if (!modalRoot) return;
+
+    const oldBal = parseFloat(acc.balance) || 0;
+    const delta = Math.round((newBal - oldBal) * 100) / 100;
+    const isPositive = delta >= 0;
+
+    modalRoot.innerHTML = `
+      <div class="apple-modal-overlay open" id="conguaglio-modal-overlay">
+        <div class="apple-modal-sheet open" id="conguaglio-modal-sheet" style="max-width: 480px;">
+          <div class="modal-handle"></div>
+          <div class="modal-header">
+            <button class="modal-close-btn" id="conguaglio-cancel">Annulla</button>
+            <h3>Conguaglio Saldo</h3>
+            <button class="modal-save-btn" id="conguaglio-confirm">Conferma</button>
+          </div>
+          <div class="modal-form">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: var(--space-text-sub); line-height: var(--lh-body);">
+              Stai modificando il saldo del conto <strong>${acc.name}</strong>.
+            </p>
+
+            <div class="conguaglio-box">
+              <div class="conguaglio-delta-row">
+                <span style="font-size: 13px; color: var(--text-secondary);">Saldo Attuale:</span>
+                <strong class="privacy-mask">${this.formatCurrency(oldBal)}</strong>
+              </div>
+              <div class="conguaglio-delta-row">
+                <span style="font-size: 13px; color: var(--text-secondary);">Nuovo Saldo:</span>
+                <strong class="privacy-mask">${this.formatCurrency(newBal)}</strong>
+              </div>
+              <div class="conguaglio-delta-row" style="margin-top: var(--space-text-title); padding-top: var(--space-text-title); border-top: 1px dashed var(--border-subtle);">
+                <span style="font-size: 13px; font-weight: 600;">Differenza (Delta):</span>
+                <span class="conguaglio-delta-val ${isPositive ? 'positive' : 'negative'}">
+                  ${isPositive ? '+' : ''}${this.formatCurrency(delta)}
+                </span>
+              </div>
+            </div>
+
+            <label class="form-label" style="margin-top: var(--space-box-gap-md);">Come registrare questo conguaglio?</label>
+            <div class="conguaglio-options">
+              <label class="conguaglio-option-label">
+                <input type="radio" name="conguaglio-choice" value="real" checked />
+                <div>
+                  <strong style="font-size: 13px; display: block; color: var(--text-primary); line-height: var(--lh-title);">Crea movimento di conguaglio reale</strong>
+                  <span style="font-size: 11px; color: var(--text-secondary); line-height: var(--lh-body);">
+                    Genera una transazione (${isPositive ? 'Entrata' : 'Uscita'}) in data odierna con categoria "Conguaglio / Rettifica" per giustificare la variazione nei grafici e nello storico.
+                  </span>
+                </div>
+              </label>
+
+              <label class="conguaglio-option-label">
+                <input type="radio" name="conguaglio-choice" value="fictional" />
+                <div>
+                  <strong style="font-size: 13px; display: block; color: var(--text-primary); line-height: var(--lh-title);">Solo rettifica fittizia (Nessun movimento)</strong>
+                  <span style="font-size: 11px; color: var(--text-secondary); line-height: var(--lh-body);">
+                    Aggiorna solo il saldo attuale del conto senza inserire alcuna transazione nello storico dei movimenti.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div class="form-group" id="conguaglio-note-group" style="margin-top: var(--space-box-gap-md);">
+              <label class="form-label" for="conguaglio-note">Nota per il movimento</label>
+              <input type="text" id="conguaglio-note" class="apple-input" value="Rettifica Saldo ${acc.name}" />
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    const overlay = document.getElementById('conguaglio-modal-overlay');
+    const close = () => {
+      overlay.classList.remove('open');
+      setTimeout(() => { modalRoot.innerHTML = ''; }, 250);
+    };
+
+    document.getElementById('conguaglio-cancel')?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    const radios = overlay.querySelectorAll('input[name="conguaglio-choice"]');
+    const noteGroup = document.getElementById('conguaglio-note-group');
+    radios.forEach(r => {
+      r.addEventListener('change', () => {
+        if (noteGroup) {
+          noteGroup.style.display = r.value === 'real' ? 'block' : 'none';
+        }
+      });
+    });
+
+    document.getElementById('conguaglio-confirm')?.addEventListener('click', () => {
+      const selected = overlay.querySelector('input[name="conguaglio-choice"]:checked')?.value;
+      const isReal = selected === 'real';
+      const note = document.getElementById('conguaglio-note')?.value.trim();
+
+      financeStore.reconcileAccount(acc.name, newBal, isReal, note);
+      close();
+      this.render(container);
+    });
+  }
+
   bindEvents(container) {
     // Sotto-navigazione Tabs
     container.querySelectorAll('.settings-subtab-btn').forEach(btn => {
@@ -315,20 +477,26 @@ export class ImpostazioniView {
       });
     }
 
-    // Aggiornamento Saldo Conto Inline
+    // Aggiornamento Saldo Conto Inline con Conguaglio Apple
     container.querySelectorAll('.apple-btn-save-inline').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.id;
         const input = container.querySelector(`.acc-balance-input[data-id="${id}"]`);
-        if (input) {
-          const newBal = parseFloat(input.value) || 0;
-          financeStore.updateAccountBalance(id, newBal);
-          btn.textContent = '✓ Salvato';
-          btn.style.color = 'var(--apple-green)';
-          setTimeout(() => {
-            btn.textContent = 'Aggiorna';
-            btn.style.color = '';
-          }, 1500);
+        const accounts = financeStore.getAccounts();
+        const acc = accounts.find(a => a.id === id);
+        if (input && acc) {
+          const newBal = parseFloat(input.value);
+          if (isNaN(newBal)) return;
+          if (Math.abs(newBal - acc.balance) > 0.001) {
+            this.openConguaglioModal(acc, newBal, container);
+          } else {
+            btn.textContent = '✓ Salvato';
+            btn.style.color = 'var(--apple-green)';
+            setTimeout(() => {
+              btn.textContent = 'Aggiorna';
+              btn.style.color = '';
+            }, 1200);
+          }
         }
       });
     });
@@ -365,6 +533,24 @@ export class ImpostazioniView {
         this.render(container);
       });
     });
+
+    // Accorpamento Categorie Smart Merge
+    const btnMerge = document.getElementById('btn-merge-categories');
+    if (btnMerge) {
+      btnMerge.addEventListener('click', () => {
+        const src = document.getElementById('merge-source-cat')?.value;
+        const dest = document.getElementById('merge-target-cat')?.value;
+        if (!src || !dest || src === dest) {
+          alert('Seleziona due categorie diverse per procedere con l\'accorpamento.');
+          return;
+        }
+        if (confirm(`Sei sicuro di voler accorpare la categoria "${src}" dentro "${dest}"?\nTutti i movimenti passati verranno convertiti a "${dest}".`)) {
+          const res = financeStore.mergeCategories(src, dest);
+          alert(`Accorpamento completato con successo!\n${res.updatedCount} movimenti storici convertiti in "${dest}".`);
+          this.render(container);
+        }
+      });
+    }
 
     // Salva / Rimuovi PIN
     const btnSavePin = document.getElementById('btn-save-pin');

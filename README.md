@@ -12,10 +12,13 @@ Web app moderna per la gestione finanziaria personale, progettata con un Design 
                ▼ (Web App Serverless con Security Token)
      [Frontend Web App (Vanilla ES6 + CSS3 + Chart.js)]
          ├── Blocco 1: Scheletro Responsivo (Sidebar MacBook + Bottom Tab Bar iPhone) [COMPLETATO]
-         ├── Blocco 2: Dashboard Analitica (KPI, Tasso di Risparmio, Grafici di Cassa & Categorie) [COMPLETATO]
-         ├── Blocco 3: Movimenti (Tabella CRUD, Ricerca Real-time, Filtri e Modale Apple) [COMPLETATO]
-         ├── Blocco 4: Vista Investimenti (Portafoglio, Asset Allocation, Simulatore PAC & Pillole) [COMPLETATO]
-         └── Blocco 5: Integrazione Google Sheets API & Impostazioni di Sicurezza [COMPLETATO]
+         ├── Blocco 2: Dashboard Analitica (KPI 4-Zone, Blocco Unico Conti, Uscite One-Click) [COMPLETATO]
+         ├── Blocco 3: Monitoraggio Spese (Donut con Periodo, Budget 50/30/20, Top Merchant) [COMPLETATO]
+         ├── Blocco 4: Assistente CFO AI (Radar Anomalie, Runway Fondo XEON, Auto-Reset 15m) [COMPLETATO]
+         ├── Blocco 5: Registro Movimenti (Apple Wallet Ledger, Smart Categorizer, Export CSV) [COMPLETATO]
+         ├── Blocco 6: Investimenti & Suite FinTech (PAC, MiFID Rebalance, Goals, F.I.R.E. 4% SWR) [COMPLETATO]
+         ├── Blocco 7: Storico NW & Fiscale (Net Worth Continuo, Report Art. 51 TUIR Stampabile) [COMPLETATO]
+         └── Blocco 8: Integrazione Google Sheets API, PIN Blocco & Impostazioni di Sicurezza [COMPLETATO]
 ```
 
 ---

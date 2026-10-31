@@ -4,6 +4,7 @@
  */
 
 import { financeStore } from '../data/mockData.js';
+import { getCategoryIcon, cleanCategoryName, getIcon } from './icons.js';
 
 export class DashboardView {
   constructor() {
@@ -199,6 +200,12 @@ export class DashboardView {
     const categories = financeStore.getCategories();
     const txs = financeStore.getAllTransactions();
 
+    const health = financeStore.getFinancialHealthScore();
+    const runway = financeStore.getProjectedMonthEnd();
+    const anomalies = financeStore.getCategoryAnomalies();
+    const budget5030 = financeStore.getBudget50_30_20();
+    const forecast = financeStore.getCashFlowForecast(45);
+
     const { quickOptions, monthOptions } = this.getPeriodOptions(txs);
     const { sortedCats, totalExpenseCalc, subtitleLabel } = this.computeCategoryBreakdown(
       txs,
@@ -214,37 +221,45 @@ export class DashboardView {
     };
 
     container.innerHTML = `
-      <div class="dashboard-layout">
+      <div class="page dashboard-page">
         
         <!-- 1. Top KPI Summary Grid -->
-        <section class="kpi-grid">
+        <section class="grid-4">
           
           <!-- Card 1: Net Worth Patrimoniale -->
-          <div class="kpi-card highlight-card">
-            <div class="kpi-header">
-              <span class="kpi-label">Patrimonio Netto (Net Worth)</span>
+          <div class="card highlight-card">
+            <div class="card__header">
+              <span class="card__title">Patrimonio Netto</span>
               <div class="kpi-icon-badge balance">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                 </svg>
               </div>
             </div>
-            <div class="kpi-body">
-              <span class="kpi-value">${this.formatCurrency(summary.netWorth)}</span>
-              <div class="kpi-footer">
-                <span class="trend-badge positive">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                  Aggiornato
-                </span>
-                <span class="trend-context">Liquidità + Investimenti + Pensione</span>
+            <div class="card__value privacy-mask">${this.formatCurrency(summary.netWorth)}</div>
+            <div class="card__body">
+              <div class="kv">
+                <span class="kv__label">Liquidità</span>
+                <span class="kv__value privacy-mask">${this.formatCurrency(summary.liquidTotal)}</span>
               </div>
+              <div class="kv">
+                <span class="kv__label">Investimenti</span>
+                <span class="kv__value privacy-mask">${this.formatCurrency(summary.netWorth - summary.liquidTotal)}</span>
+              </div>
+            </div>
+            <div class="card__footer">
+              <span class="trend-badge positive">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                Aggiornato
+              </span>
+              <span class="trend-context" title="Liquidità + Investimenti + Pensione">Asset complessivi</span>
             </div>
           </div>
 
           <!-- Card 2: Liquidità Disponibile -->
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span class="kpi-label">Liquidità Diretta</span>
+          <div class="card">
+            <div class="card__header">
+              <span class="card__title">Liquidità Diretta</span>
               <div class="kpi-icon-badge income">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="2" y="4" width="20" height="16" rx="3"></rect>
@@ -252,18 +267,27 @@ export class DashboardView {
                 </svg>
               </div>
             </div>
-            <div class="kpi-body">
-              <span class="kpi-value">${this.formatCurrency(summary.liquidTotal)}</span>
-              <div class="kpi-footer">
-                <span class="trend-context">Buddybank + Buoni Pasto + Contanti</span>
+            <div class="card__value privacy-mask">${this.formatCurrency(summary.liquidTotal)}</div>
+            <div class="card__body">
+              <div class="kv">
+                <span class="kv__label">Conto corrente</span>
+                <span class="kv__value privacy-mask">${this.formatCurrency(4160.00)}</span>
               </div>
+              <div class="kv">
+                <span class="kv__label">Buoni pasto + Cassa</span>
+                <span class="kv__value privacy-mask">€ 398,50</span>
+              </div>
+            </div>
+            <div class="card__footer">
+              <span class="trend-badge positive">Disponibile</span>
+              <span class="trend-context" title="Buddybank + Buoni Pasto + Contanti">Cassa immediata</span>
             </div>
           </div>
 
-          <!-- Card 3: Uscite del Mese -->
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span class="kpi-label">Uscite Tracciate Mese</span>
+          <!-- Card 3: Uscite del Mese (Clickable -> Porta a #spese) -->
+          <div class="card dashboard-expense-card" id="dash-expense-kpi-card" title="Clicca per aprire la nuova sezione Dettaglio Spese">
+            <div class="card__header">
+              <span class="card__title">Uscite Mese</span>
               <div class="kpi-icon-badge expense">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -271,79 +295,298 @@ export class DashboardView {
                 </svg>
               </div>
             </div>
-            <div class="kpi-body">
-              <span class="kpi-value">${this.formatCurrency(summary.monthlyExpense)}</span>
-              <div class="kpi-footer">
-                <span class="trend-badge ${summary.monthlyExpense <= (summary.monthlyIncome * 0.75) ? 'positive' : 'negative'}">
-                  ${((summary.monthlyExpense / summary.monthlyIncome) * 100).toFixed(0)}% del budget
-                </span>
-                <span class="trend-context">Target max 75%</span>
+            <div class="card__value privacy-mask">${this.formatCurrency(summary.monthlyExpense)}</div>
+            <div class="card__body">
+              <div class="meter-row">
+                <div class="meter__header">
+                  <span class="meter__label">Saturazione budget</span>
+                  <span class="meter__val">${((summary.monthlyExpense / summary.monthlyIncome) * 100).toFixed(0)}%</span>
+                </div>
+                <div class="meter">
+                  <div class="meter__fill" style="width: ${Math.min(100, (summary.monthlyExpense / summary.monthlyIncome) * 100)}%; background: ${summary.monthlyExpense <= (summary.monthlyIncome * 0.75) ? 'var(--apple-green)' : 'var(--apple-red)'};"></div>
+                </div>
               </div>
+            </div>
+            <div class="card__footer">
+              <span class="badge ${summary.monthlyExpense <= (summary.monthlyIncome * 0.75) ? 'badge--positive' : 'badge--negative'}">
+                ${((summary.monthlyExpense / summary.monthlyIncome) * 100).toFixed(0)}% budget
+              </span>
+              <span class="trend-context" style="color: var(--apple-blue); font-weight: 600;">Dettaglio spese &rarr;</span>
             </div>
           </div>
 
           <!-- Card 4: Tasso di Risparmio & Regola 75/25 -->
-          <div class="kpi-card savings-kpi-card">
-            <div class="kpi-header">
-              <span class="kpi-label">Tasso di Risparmio</span>
+          <div class="card">
+            <div class="card__header">
+              <span class="card__title">Tasso di Risparmio</span>
               <div class="kpi-icon-badge savings">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
               </div>
             </div>
-            <div class="kpi-body">
-              <span class="kpi-value savings-value">${summary.savingsRate}%</span>
-              <div class="savings-progress-container">
-                <div class="savings-progress-track">
-                  <div class="savings-progress-fill" style="width: ${Math.min(100, (summary.savingsRate / 25) * 100)}%;"></div>
+            <div class="card__value privacy-mask">${summary.savingsRate}%</div>
+            <div class="card__body">
+              <div class="meter-row">
+                <div class="meter__header">
+                  <span class="meter__label">Risparmio mese</span>
+                  <span class="meter__val privacy-mask">+${this.formatCurrency(summary.savingsAmount)}</span>
+                </div>
+                <div class="meter">
+                  <div class="meter__fill" style="width: ${Math.min(100, (summary.savingsRate / 25) * 100)}%; background: var(--apple-blue);"></div>
                 </div>
               </div>
-              <div class="kpi-footer savings-footer">
-                <span class="trend-badge ${summary.savingsRate >= 25 ? 'positive' : ''}">
-                  Target 25% ${summary.savingsRate >= 25 ? 'raggiunto' : 'in corso'}
-                </span>
-                <span class="trend-context">+${this.formatCurrency(summary.savingsAmount)}</span>
-              </div>
+            </div>
+            <div class="card__footer">
+              <span class="badge badge--positive">Target 25%</span>
+              <span class="trend-context" title="Obiettivo 25% raggiunto con successo">Raggiunto</span>
             </div>
           </div>
 
         </section>
 
-        <!-- 2. Strip Rapido Conti & Saldi Reali -->
-        <section class="accounts-pill-strip">
-          ${accounts.map(acc => `
-            <div class="account-pill-card">
-              <div class="acc-pill-top">
-                <span class="acc-pill-name">${acc.name}</span>
-                <span class="acc-pill-type">${acc.type}</span>
-              </div>
-              <span class="acc-pill-val">${this.formatCurrency(acc.balance)}</span>
+        <!-- 2. Blocco Unico Saldi Conti & Depositi (Lista Compatta a 4 Zone) -->
+        <section class="card accounts-card">
+          <div class="card__header">
+            <div class="accounts-header-title-group">
+              <span class="card__title">Saldi Conti & Depositi</span>
+              <span class="accounts-header-sub">Disponibilità liquida, investimenti ETF e fondo pensione</span>
             </div>
-          `).join('')}
+            <div class="accounts-header-badges">
+              <span class="badge badge--neutral">${accounts.length} Conti Attivi</span>
+              <span class="badge badge--info privacy-mask">Totale ${this.formatCurrency(summary.netWorth)}</span>
+            </div>
+          </div>
+          <div class="card__body accounts-card__body">
+            <div class="accounts-list-grid">
+              ${accounts.map(acc => {
+                let badgeClass = 'badge--neutral';
+                let badgeLabel = 'Liquidità';
+                let iconBg = 'rgba(0, 113, 227, 0.12)';
+                let iconColor = 'var(--apple-blue)';
+                let iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>`;
+
+                if (acc.isInvestment) {
+                  badgeClass = 'badge--purple';
+                  badgeLabel = acc.name.toLowerCase().includes('xeon') ? 'Fondo Emergenza' : 'Portafoglio';
+                  iconBg = 'rgba(175, 82, 222, 0.14)';
+                  iconColor = 'var(--apple-purple)';
+                  iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>`;
+                } else if (acc.isPension) {
+                  badgeClass = 'badge--positive';
+                  badgeLabel = 'Previdenza';
+                  iconBg = 'rgba(52, 199, 89, 0.14)';
+                  iconColor = 'var(--apple-green)';
+                  iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2l10 8H2z"></path></svg>`;
+                }
+
+                const pctOfTotal = summary.netWorth > 0 ? ((acc.balance / summary.netWorth) * 100).toFixed(1) : '0.0';
+
+                return `
+                  <div class="account-row-item">
+                    <div class="account-row-leading">
+                      <div class="account-row-icon" style="background: ${iconBg}; color: ${iconColor};">
+                        ${iconSvg}
+                      </div>
+                      <div class="account-row-meta">
+                        <span class="account-row-name" title="${acc.name}">${acc.name}</span>
+                        <span class="account-row-type" title="${acc.type}">${acc.type}</span>
+                      </div>
+                    </div>
+                    <div class="account-row-trailing">
+                      <div class="account-row-val privacy-mask">${this.formatCurrency(acc.balance)}</div>
+                      <div class="account-row-sub">
+                        <span class="account-row-pct" title="Quota su patrimonio totale">${pctOfTotal}% del tot.</span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+          <div class="card__footer accounts-card__footer">
+            <div class="accounts-footer-stats">
+              <span class="accounts-stat-item">
+                <span class="stat-dot" style="background: var(--apple-blue);"></span>
+                Liquidità: <strong class="privacy-mask">${this.formatCurrency(summary.liquidTotal)}</strong>
+              </span>
+              <span class="accounts-stat-item">
+                <span class="stat-dot" style="background: var(--apple-purple);"></span>
+                Investimenti + Pensione: <strong class="privacy-mask">${this.formatCurrency(summary.netWorth - summary.liquidTotal)}</strong>
+              </span>
+            </div>
+            <a href="#impostazioni" class="accounts-reconcile-link" title="Gestisci e conguaglia i conti nelle Impostazioni">
+              Riconcilia saldi &rarr;
+            </a>
+          </div>
         </section>
 
-        <!-- 3. Grafici Interattivi Apple: Flusso di Cassa & Ripartizione -->
+        <!-- 3. Smart Financial Intelligence Strip: Health Score, Runway, Anomalies, Budget 50/30/20 -->
+        <section class="grid-4">
+          
+          <!-- Widget 1: Financial Health Score -->
+          <div class="card">
+            <div class="card__header">
+              <span class="card__title">Salute Finanziaria</span>
+              <span class="badge" style="background: ${health.color}22; color: ${health.color};">
+                ${health.label}
+              </span>
+            </div>
+            <div class="card__value" style="color: ${health.color};">
+              ${health.score}<small style="font-size: 15px; color: var(--text-tertiary); font-weight: 600;">/100</small>
+            </div>
+            <div class="card__body">
+              <div class="meter-row">
+                <div class="meter__header">
+                  <span class="meter__label">Cuscinetto XEON</span>
+                  <span class="meter__val">${health.runwayMonths} mesi</span>
+                </div>
+                <div class="meter">
+                  <div class="meter__fill" style="width: ${(health.breakdown.emergencyScore / 35) * 100}%; background: var(--apple-green);"></div>
+                </div>
+              </div>
+              <div class="meter-row">
+                <div class="meter__header">
+                  <span class="meter__label">Tasso Risparmio</span>
+                  <span class="meter__val">${health.savingsRate}%</span>
+                </div>
+                <div class="meter">
+                  <div class="meter__fill" style="width: ${(health.breakdown.savingsScore / 35) * 100}%; background: var(--apple-blue);"></div>
+                </div>
+              </div>
+            </div>
+            <div class="card__footer">
+              <span class="trend-context" title="${health.tip}">${health.tip}</span>
+            </div>
+          </div>
+
+          <!-- Widget 2: Previsione Fine Mese & Runway -->
+          <div class="card">
+            <div class="card__header">
+              <span class="card__title">Fine Mese Stimato</span>
+              <span class="badge badge--positive">Liquidità</span>
+            </div>
+            <div class="card__value privacy-mask" style="color: var(--apple-blue);">
+              ${this.formatCurrency(runway.projectedEnd)}
+            </div>
+            <div class="card__body">
+              <div class="kv">
+                <span class="kv__label">Disponibilità c/c</span>
+                <span class="kv__value privacy-mask">${this.formatCurrency(runway.liquidBalance)}</span>
+              </div>
+              <div class="kv">
+                <span class="kv__label">Rate & impegni</span>
+                <span class="kv__value privacy-mask" style="color: var(--apple-orange);">${this.formatCurrency(runway.remainingObligations)}</span>
+              </div>
+            </div>
+            <div class="card__footer">
+              <span class="badge badge--positive">Saldo coperto</span>
+              <span class="trend-context" title="Residuo stimato a fine mese">Residuo stimato</span>
+            </div>
+          </div>
+
+          <!-- Widget 3: Spike Detector (Anomalie di Spesa) -->
+          <div class="card">
+            <div class="card__header">
+              <span class="card__title">Anomalie Spese</span>
+              <span class="badge ${anomalies.length > 0 ? 'badge--warning' : 'badge--positive'}">
+                ${anomalies.length > 0 ? `${anomalies.length} alert` : 'Stabile'}
+              </span>
+            </div>
+            <div class="card__value" style="font-size: 20px;">
+              ${anomalies.length > 0 ? `${anomalies.length} Fuori Media` : 'Nessuna Anomalia'}
+            </div>
+            <div class="card__body">
+              ${anomalies.length > 0 ? anomalies.slice(0, 2).map(a => `
+                <div class="kv">
+                  <span class="kv__label" title="${cleanCategoryName(a.category)}" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <span style="color: var(--apple-orange); display: inline-flex;">${getIcon('alert', 13)}</span>
+                    ${cleanCategoryName(a.category)}
+                  </span>
+                  <span class="kv__value negative">+${a.spikePercent}%</span>
+                </div>
+                <div class="kv">
+                  <span class="kv__label">Spesa vs Media</span>
+                  <span class="kv__value privacy-mask" title="${this.formatCurrency(a.currentAmount)} vs ${this.formatCurrency(a.historicalAvg)}">${this.formatCurrency(a.currentAmount)}</span>
+                </div>
+              `).join('') : `
+                <div class="kv">
+                  <span class="kv__label">Abitudini di spesa</span>
+                  <span class="kv__value positive">Regolari</span>
+                </div>
+                <div class="kv">
+                  <span class="kv__label">Monitoraggio</span>
+                  <span class="kv__value muted">Attivo</span>
+                </div>
+              `}
+            </div>
+            <div class="card__footer">
+              <span class="trend-context">${anomalies.length > 0 ? 'Spesa superiore alla media' : 'Spese allineate'}</span>
+            </div>
+          </div>
+
+          <!-- Widget 4: Budget 50/30/20 & Spesa Sicura Giornaliera -->
+          <div class="card">
+            <div class="card__header">
+              <span class="card__title">Budget 50/30/20</span>
+              <span class="badge ${budget5030.dailySafeSpend > 15 ? 'badge--positive' : 'badge--warning'}">
+                ${budget5030.daysRemaining} gg residui
+              </span>
+            </div>
+            <div class="card__value privacy-mask" style="color: var(--apple-blue);">
+              ${this.formatCurrency(budget5030.dailySafeSpend)}<small style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">/giorno</small>
+            </div>
+            <div class="card__body">
+              <div class="meter-row">
+                <div class="meter__header">
+                  <span class="meter__label">Bisogni (50%)</span>
+                  <span class="meter__val privacy-mask">${this.formatCurrency(budget5030.needs.spent)} (${budget5030.needs.pct}%)</span>
+                </div>
+                <div class="meter">
+                  <div class="meter__fill" style="width: ${Math.min(100, budget5030.needs.pct)}%; background: var(--apple-blue);"></div>
+                </div>
+              </div>
+              <div class="meter-row">
+                <div class="meter__header">
+                  <span class="meter__label">Voluttuari (30%)</span>
+                  <span class="meter__val privacy-mask">${this.formatCurrency(budget5030.wants.spent)} (${budget5030.wants.pct}%)</span>
+                </div>
+                <div class="meter">
+                  <div class="meter__fill" style="width: ${Math.min(100, budget5030.wants.pct)}%; background: var(--apple-orange);"></div>
+                </div>
+              </div>
+            </div>
+            <div class="card__footer">
+              <span class="trend-context">Spesa giornaliera sostenibile</span>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 4. Grafici Interattivi: Flusso di Cassa & Ripartizione Categorie -->
         <section class="charts-grid">
           
-          <div class="chart-card">
-            <div class="chart-header">
-              <div class="chart-title-group">
-                <h3>Flusso di Cassa & Trend Mensile</h3>
-                <span class="chart-subtitle">Entrate stimate vs Uscite tracciate nel tempo</span>
+          <div class="card chart-card">
+            <div class="card__header">
+              <span class="card__title">Flusso di Cassa & Trend Mensile</span>
+              <span class="trend-badge positive">Ultime 6 Mensilità</span>
+            </div>
+            <div class="card__value privacy-mask" style="font-size: 22px;">
+              ${this.formatCurrency(summary.monthlyIncome)} <small style="font-size: 14px; font-weight: 500; color: var(--text-secondary);">vs ${this.formatCurrency(summary.monthlyExpense)} uscite</small>
+            </div>
+            <div class="card__body" style="padding: var(--space-2) 0;">
+              <div class="chart-canvas-container" style="height: 260px; min-height: 260px;">
+                <canvas id="cashFlowCanvas"></canvas>
               </div>
             </div>
-            <div class="chart-canvas-container">
-              <canvas id="cashFlowCanvas"></canvas>
+            <div class="card__footer">
+              <span class="trend-context">Entrate stimate vs Uscite tracciate nel tempo</span>
             </div>
           </div>
 
-          <div class="chart-card donut-card">
-            <div class="chart-header">
-              <div class="chart-title-group">
-                <h3>Spese per Categoria</h3>
-                <span class="chart-subtitle" id="donut-period-subtitle">${subtitleLabel}</span>
-              </div>
+          <div class="card chart-card donut-card">
+            <div class="card__header">
+              <span class="card__title">Spese per Categoria</span>
               <div class="apple-select-wrapper category-period-wrapper">
                 <select id="category-period-filter" class="apple-select category-period-select" aria-label="Periodo di riferimento spese">
                   <optgroup label="Periodi Rapidi">
@@ -358,50 +601,114 @@ export class DashboardView {
                 <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
-            <div class="donut-chart-container">
-              <div class="donut-canvas-wrapper">
-                <canvas id="categoryDonutCanvas"></canvas>
-                <div class="donut-center-text">
-                  <span class="donut-center-label">Totale Uscite</span>
-                  <span class="donut-center-value" id="donut-total-value">${this.formatCurrency(totalExpenseCalc)}</span>
+            <div class="card__value privacy-mask" style="font-size: 22px;">
+              <span id="donut-total-value">${this.formatCurrency(totalExpenseCalc)}</span> <small style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">totale uscite</small>
+            </div>
+            <div class="card__body" style="padding: var(--space-2) 0;">
+              <div class="donut-chart-container" style="display: flex; gap: 16px; align-items: center;">
+                <div class="donut-canvas-wrapper" style="position: relative; width: 140px; height: 140px; flex-shrink: 0;">
+                  <canvas id="categoryDonutCanvas"></canvas>
+                </div>
+                <div class="donut-legend" id="category-donut-legend" style="flex: 1; min-width: 0; max-height: 180px; overflow-y: auto;">
+                  ${this.renderLegendItems(sortedCats)}
                 </div>
               </div>
-              <div class="donut-legend" id="category-donut-legend">
-                ${this.renderLegendItems(sortedCats)}
-              </div>
+            </div>
+            <div class="card__footer">
+              <span class="trend-context" id="donut-period-subtitle">${subtitleLabel}</span>
             </div>
           </div>
 
         </section>
 
-        <!-- 4. Spese Ricorrenti & Rate in Scadenza -->
-        <section class="recurring-section-card">
-          <div class="section-card-header">
-            <div>
-              <h3>Spese Ricorrenti & Rate Attive</h3>
-              <span class="card-subtitle">Scadenze fisse e piani rateali in corso da movimenti</span>
+        <!-- 5. Previsione Liquidità & Timeline Scadenze (45 Giorni) -->
+        <section class="card forecast-section-card">
+          <div class="card__header">
+            <span class="card__title">Cash Flow Forecast & Timeline Scadenze</span>
+            <div class="forecast-header-stats cluster-gap-sm">
+              <span class="forecast-stat-pill">Min: <strong class="privacy-mask">${this.formatCurrency(forecast.minBalance)}</strong></span>
+              <span class="forecast-stat-pill positive">Max: <strong class="privacy-mask">${this.formatCurrency(forecast.maxBalance)}</strong></span>
             </div>
           </div>
-          <div class="recurring-grid">
-            ${financeStore.recurringItems.map(item => `
-              <div class="recurring-item-card">
-                <div class="rec-top">
-                  <span class="rec-title">${item.name}</span>
-                  <span class="rec-amount">€${item.monthlyAmount.toFixed(2)}/mese</span>
-                </div>
-                <div class="rec-meta">
-                  <span>${item.category} • Scadenza: ${item.nextDate}</span>
-                </div>
-                ${item.totalRate > 0 ? `
-                  <div class="rec-progress-bar">
-                    <div class="rec-progress-fill" style="width: ${(item.currentRata / item.totalRate) * 100}%;"></div>
+          <div class="card__value" style="font-size: 20px;">
+            <span>Proiezione Cassa sui Prossimi 45 Giorni</span>
+          </div>
+          <div class="card__body">
+            <div class="forecast-timeline-scroll">
+              ${forecast.milestones.map(m => `
+                <div class="forecast-milestone-card ${m.type}">
+                  <div class="milestone-top">
+                    <span class="milestone-icon">${m.icon}</span>
+                    <span class="milestone-date">${new Date(m.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
                   </div>
-                  <span class="rec-rate-info">Rata ${item.currentRata} di ${item.totalRate} completata</span>
-                ` : `
-                  <span class="rec-badge-fixed">Pagamento Ricorrente Fisso</span>
-                `}
-              </div>
-            `).join('')}
+                  <div class="milestone-body">
+                    <span class="milestone-title">${m.title}</span>
+                    <span class="milestone-amount privacy-mask ${m.type === 'income' ? 'income-color' : 'expense-color'}">
+                      ${m.type === 'income' ? '+' : '-'}${this.formatCurrency(m.amount)}
+                    </span>
+                  </div>
+                  <div class="milestone-footer">
+                    <span class="milestone-bal-label">Saldo stimato:</span>
+                    <span class="milestone-bal-val privacy-mask">${this.formatCurrency(m.balance)}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="card__footer">
+            <span class="trend-context">Evoluzione attesa della cassa corrente tra entrate certe e spese ricorrenti</span>
+          </div>
+        </section>
+
+        <!-- 6. Spese Ricorrenti & Rate in Scadenza -->
+        <section class="card recurring-section-card">
+          <div class="card__header">
+            <span class="card__title">Spese Ricorrenti & Rate Attive</span>
+            <span class="trend-badge positive">${financeStore.recurringItems.length} Piani Attivi</span>
+          </div>
+          <div class="card__value" style="font-size: 20px;">
+            <span>Piani di Spesa Fissi e Rateali</span>
+          </div>
+          <div class="card__body">
+            <div class="grid-4" style="gap: var(--space-5);">
+              ${financeStore.recurringItems.map(item => `
+                <div class="card" style="background: var(--bg-hover); padding: 18px; box-shadow: none;">
+                  <div class="card__header">
+                    <span class="card__title" title="${item.name}">${item.name}</span>
+                    <span class="cat-pill" style="font-size: 11px;">${item.category}</span>
+                  </div>
+                  <div class="card__value privacy-mask" style="font-size: 18px;">
+                    €${item.monthlyAmount.toFixed(2)}<small style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">/mese</small>
+                  </div>
+                  <div class="card__body">
+                    <div class="kv">
+                      <span class="kv__label">Scadenza</span>
+                      <span class="kv__value">${item.nextDate}</span>
+                    </div>
+                    ${item.totalRate > 0 ? `
+                      <div class="kv">
+                        <span class="kv__label">Piano</span>
+                        <span class="kv__value">Rata ${item.currentRata}/${item.totalRate}</span>
+                      </div>
+                      <div class="meter">
+                        <div class="meter__fill" style="width: ${(item.currentRata / item.totalRate) * 100}%; background: var(--apple-blue);"></div>
+                      </div>
+                    ` : `
+                      <div class="kv">
+                        <span class="kv__label">Tipo</span>
+                        <span class="kv__value">Fisso mensile</span>
+                      </div>
+                    `}
+                  </div>
+                  <div class="card__footer">
+                    <span class="trend-context">${item.totalRate > 0 ? `Rata ${item.currentRata} di ${item.totalRate}` : 'Pagamento Continuo'}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="card__footer">
+            <span class="trend-context">Scadenze fisse e piani rateali in corso desunti dai movimenti</span>
           </div>
         </section>
 
@@ -409,6 +716,13 @@ export class DashboardView {
     `;
 
     this.bindCategoryPeriodEvents(txs, categories);
+
+    const expenseCard = container.querySelector('#dash-expense-kpi-card');
+    if (expenseCard) {
+      expenseCard.addEventListener('click', () => {
+        window.location.hash = '#spese';
+      });
+    }
 
     requestAnimationFrame(() => {
       this.initLineChart(monthlyHistory);

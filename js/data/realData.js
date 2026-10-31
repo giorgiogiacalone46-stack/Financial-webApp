@@ -20,7 +20,101 @@ export const INITIAL_CATEGORIES = [
   { id: 'fondo_emergenza', name: '🏦 Fondo di emergenza', type: 'transfer', color: '#34C759' },
   { id: 'livello_sicurezza', name: '📈 Livello Sicurezza', type: 'transfer', color: '#0071E3' },
   { id: 'livello_crescita', name: '🛅 Livello Crescita', type: 'transfer', color: '#5856D6' },
+  { id: 'conguaglio', name: '⚖️ Conguaglio / Rettifica', type: 'expense', color: '#8E8E93' },
   { id: 'altro', name: '❔Altro', type: 'expense', color: '#8E8E93' }
+];
+
+export const INITIAL_GOALS = [
+  {
+    id: 'goal_1',
+    name: 'Fondo Emergenza 6 Mesi',
+    emoji: '🛡️',
+    targetAmount: 6000,
+    currentAmount: 5383.32,
+    deadline: '2027-06-30',
+    account: 'Trade Republic - XEON',
+    notes: 'Copertura per spese impreviste su XEON'
+  },
+  {
+    id: 'goal_2',
+    name: 'Vacanza Estiva',
+    emoji: '✈️',
+    targetAmount: 1800,
+    currentAmount: 850,
+    deadline: '2027-08-01',
+    account: 'Buddybank',
+    notes: 'Risparmio vacanze estive'
+  },
+  {
+    id: 'goal_3',
+    name: 'Upgrade MacBook Pro',
+    emoji: '💻',
+    targetAmount: 2200,
+    currentAmount: 600,
+    deadline: '2027-12-31',
+    account: 'Buddybank',
+    notes: 'Nuovo Mac da lavoro'
+  }
+];
+
+export const DEFAULT_SMART_RULES = [
+  { keyword: 'esselunga', category: '🛒 Alimentari' },
+  { keyword: 'conad', category: '🛒 Alimentari' },
+  { keyword: 'coop', category: '🛒 Alimentari' },
+  { keyword: 'lidl', category: '🛒 Alimentari' },
+  { keyword: 'carrefour', category: '🛒 Alimentari' },
+  { keyword: 'spesa', category: '🛒 Alimentari' },
+  { keyword: 'supermercato', category: '🛒 Alimentari' },
+  { keyword: 'telepass', category: '🚗 Auto' },
+  { keyword: 'autostrada', category: '🚗 Auto' },
+  { keyword: 'eni', category: '🚗 Auto' },
+  { keyword: 'q8', category: '🚗 Auto' },
+  { keyword: 'ip', category: '🚗 Auto' },
+  { keyword: 'benzina', category: '🚗 Auto' },
+  { keyword: 'carburante', category: '🚗 Auto' },
+  { keyword: 'parcheggio', category: '🚗 Auto' },
+  { keyword: 'garage', category: '🚗 Auto' },
+  { keyword: 'metro', category: '🚊 Trasporti' },
+  { keyword: 'atm', category: '🚊 Trasporti' },
+  { keyword: 'trenitalia', category: '🚊 Trasporti' },
+  { keyword: 'italo', category: '🚊 Trasporti' },
+  { keyword: 'bus', category: '🚊 Trasporti' },
+  { keyword: 'biglietto', category: '🚊 Trasporti' },
+  { keyword: 'ristorante', category: '🍴Uscite' },
+  { keyword: 'pizzeria', category: '🍴Uscite' },
+  { keyword: 'trattoria', category: '🍴Uscite' },
+  { keyword: 'bar', category: '🍴Uscite' },
+  { keyword: 'caffe', category: '🍴Uscite' },
+  { keyword: 'aperitivo', category: '🍴Uscite' },
+  { keyword: 'glovo', category: '🍴Uscite' },
+  { keyword: 'deliveroo', category: '🍴Uscite' },
+  { keyword: 'just eat', category: '🍴Uscite' },
+  { keyword: 'mcdonald', category: '🍴Uscite' },
+  { keyword: 'amazon', category: '🛍️ Shopping' },
+  { keyword: 'zara', category: '🛍️ Shopping' },
+  { keyword: 'zalando', category: '🛍️ Shopping' },
+  { keyword: 'h&m', category: '🛍️ Shopping' },
+  { keyword: 'vestiti', category: '🛍️ Shopping' },
+  { keyword: 'scarpe', category: '🛍️ Shopping' },
+  { keyword: 'farmacia', category: '🚑 Salute' },
+  { keyword: 'medico', category: '🚑 Salute' },
+  { keyword: 'dentista', category: '🚑 Salute' },
+  { keyword: 'analisi', category: '🚑 Salute' },
+  { keyword: 'palestra', category: '💪🏻 Fitness' },
+  { keyword: 'decathlon', category: '💪🏻 Fitness' },
+  { keyword: 'fitness', category: '💪🏻 Fitness' },
+  { keyword: 'apple', category: '💻 Tecnologia' },
+  { keyword: 'netflix', category: '💻 Tecnologia' },
+  { keyword: 'spotify', category: '💻 Tecnologia' },
+  { keyword: 'icloud', category: '💻 Tecnologia' },
+  { keyword: 'amazon prime', category: '💻 Tecnologia' },
+  { keyword: 'affitto', category: '🏡 Casa' },
+  { keyword: 'enel', category: '🏡 Casa' },
+  { keyword: 'luce', category: '🏡 Casa' },
+  { keyword: 'gas', category: '🏡 Casa' },
+  { keyword: 'condominio', category: '🏡 Casa' },
+  { keyword: 'stipendio', category: '💰Stipendio' },
+  { keyword: 'busta paga', category: '💰Stipendio' }
 ];
 
 export const INITIAL_ACCOUNTS = [
@@ -211,6 +305,10 @@ export const INITIAL_HISTORICAL_NW = [
   {
     "month": "08/2026",
     "value": 15974.21
+  },
+  {
+    "month": "09/2026",
+    "value": 16951.37
   }
 ];
 export const INITIAL_TRANSACTIONS = [

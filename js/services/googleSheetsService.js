@@ -2,18 +2,21 @@
  * Google Sheets API Service - Client Adattatore Reale
  */
 
-const STORAGE_KEYS = {
+const SHEETS_STORAGE_KEYS = {
   WEB_APP_URL: 'finanze_gas_url',
   SECURITY_TOKEN: 'finanze_gas_token',
   AUTO_SYNC: 'finanze_auto_sync',
-  LAST_SYNC: 'finanze_last_sync'
+  LAST_SYNC: 'finanze_last_sync',
+  SANDBOX_MODE: 'finanze_sandbox_mode'
 };
 
 export class GoogleSheetsService {
   constructor() {
-    this.webAppUrl = localStorage.getItem(STORAGE_KEYS.WEB_APP_URL) || '';
-    this.securityToken = localStorage.getItem(STORAGE_KEYS.SECURITY_TOKEN) || '';
-    this.autoSync = localStorage.getItem(STORAGE_KEYS.AUTO_SYNC) !== 'false';
+    this.webAppUrl = localStorage.getItem(SHEETS_STORAGE_KEYS.WEB_APP_URL) || '';
+    this.securityToken = localStorage.getItem(SHEETS_STORAGE_KEYS.SECURITY_TOKEN) || '';
+    this.autoSync = localStorage.getItem(SHEETS_STORAGE_KEYS.AUTO_SYNC) !== 'false';
+    // Sandbox Mode: default TRUE in beta per proteggere il database reale da qualsiasi scrittura
+    this.sandboxMode = localStorage.getItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE) !== 'false';
     this.isOnline = navigator.onLine;
     this.syncStatus = 'idle';
 
@@ -21,18 +24,30 @@ export class GoogleSheetsService {
     window.addEventListener('offline', () => { this.isOnline = false; this.updateStatusBadge(); });
   }
 
+  isSandboxMode() {
+    return this.sandboxMode;
+  }
+
+  setSandboxMode(val) {
+    this.sandboxMode = Boolean(val);
+    localStorage.setItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE, this.sandboxMode ? 'true' : 'false');
+    this.updateStatusBadge();
+  }
+
   isConfigured() {
     return Boolean(this.webAppUrl && this.webAppUrl.startsWith('https://script.google.com/macros/s/'));
   }
 
-  saveConfig(url, token, autoSync = true) {
+  saveConfig(url, token, autoSync = true, sandboxMode = true) {
     this.webAppUrl = url.trim();
     this.securityToken = token.trim();
     this.autoSync = autoSync;
+    this.sandboxMode = sandboxMode;
 
-    localStorage.setItem(STORAGE_KEYS.WEB_APP_URL, this.webAppUrl);
-    localStorage.setItem(STORAGE_KEYS.SECURITY_TOKEN, this.securityToken);
-    localStorage.setItem(STORAGE_KEYS.AUTO_SYNC, this.autoSync);
+    localStorage.setItem(SHEETS_STORAGE_KEYS.WEB_APP_URL, this.webAppUrl);
+    localStorage.setItem(SHEETS_STORAGE_KEYS.SECURITY_TOKEN, this.securityToken);
+    localStorage.setItem(SHEETS_STORAGE_KEYS.AUTO_SYNC, this.autoSync);
+    localStorage.setItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE, this.sandboxMode ? 'true' : 'false');
 
     this.updateStatusBadge();
   }
@@ -42,8 +57,9 @@ export class GoogleSheetsService {
       webAppUrl: this.webAppUrl,
       securityToken: this.securityToken,
       autoSync: this.autoSync,
+      sandboxMode: this.sandboxMode,
       isConfigured: this.isConfigured(),
-      lastSync: localStorage.getItem(STORAGE_KEYS.LAST_SYNC)
+      lastSync: localStorage.getItem(SHEETS_STORAGE_KEYS.LAST_SYNC)
     };
   }
 
@@ -71,7 +87,7 @@ export class GoogleSheetsService {
 
       if (res.status === 'success') {
         this.syncStatus = 'connected';
-        localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+        localStorage.setItem(SHEETS_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         this.updateStatusBadge();
         const txCount = res.data && res.data.transactions ? res.data.transactions.length : (res.count || 0);
         return {
@@ -109,7 +125,7 @@ export class GoogleSheetsService {
 
       if (res.status === 'success' && res.data) {
         this.syncStatus = 'connected';
-        localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+        localStorage.setItem(SHEETS_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         this.updateStatusBadge();
         return res.data;
       }
@@ -123,6 +139,11 @@ export class GoogleSheetsService {
   }
 
   async pushTransaction(transaction) {
+    if (this.sandboxMode) {
+      console.log('🛡️ [Beta Sandbox] Scrittura bloccata: la modifica resta solo fittizia sul dispositivo e NON intacca Google Sheets.');
+      return { success: true, localOnly: true, sandbox: true };
+    }
+
     if (!this.isConfigured()) return { success: true, localOnly: true };
 
     try {
@@ -144,7 +165,7 @@ export class GoogleSheetsService {
       const res = await response.json();
       if (res.status === 'success') {
         this.syncStatus = 'connected';
-        localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+        localStorage.setItem(SHEETS_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         this.updateStatusBadge();
         return { success: true, rowNumber: res.rowNumber };
       }
@@ -158,6 +179,11 @@ export class GoogleSheetsService {
   }
 
   async deleteTransaction(rowNumber) {
+    if (this.sandboxMode) {
+      console.log('🛡️ [Beta Sandbox] Eliminazione remota bloccata: cancellazione solo locale fittizia.');
+      return { success: true, localOnly: true, sandbox: true };
+    }
+
     if (!this.isConfigured()) return { success: true, localOnly: true };
 
     try {
@@ -189,6 +215,11 @@ export class GoogleSheetsService {
   }
 
   async updateAccountBalance(accountName, balance, type) {
+    if (this.sandboxMode) {
+      console.log('🛡️ [Beta Sandbox] Aggiornamento saldo remoto bloccato: conguaglio solo locale fittizio.');
+      return { success: true, localOnly: true, sandbox: true };
+    }
+
     if (!this.isConfigured()) return { success: true, localOnly: true };
 
     try {
@@ -215,16 +246,30 @@ export class GoogleSheetsService {
 
   updateStatusBadge() {
     const indicatorEl = document.querySelector('.sheet-status-indicator');
+    const nameEl = document.querySelector('.sheet-status-name');
     const descEl = document.querySelector('.sheet-status-desc');
     const mobilePill = document.querySelector('.mobile-sheet-pill .dot');
+    const mobileText = document.querySelector('.mobile-sheet-pill span:not(.dot)');
 
     if (!indicatorEl || !descEl) return;
 
-    if (!this.isConfigured()) {
-      indicatorEl.style.backgroundColor = '#34C759'; // Pronto con dati locali
-      indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.2)';
-      descEl.textContent = 'Dati Sincronizzati (Reali)';
+    if (this.sandboxMode) {
+      indicatorEl.style.backgroundColor = '#34C759';
+      indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.25)';
+      if (nameEl) nameEl.textContent = 'Finanze (Beta Sandbox)';
+      descEl.textContent = '🛡️ Database Protetto';
       if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
+      if (mobileText) mobileText.textContent = '🛡️ Sandbox';
+      return;
+    }
+
+    if (!this.isConfigured()) {
+      indicatorEl.style.backgroundColor = '#34C759';
+      indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.2)';
+      if (nameEl) nameEl.textContent = 'Finanze - Movimenti';
+      descEl.textContent = 'Dati Locali';
+      if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
+      if (mobileText) mobileText.textContent = 'Finanze';
     } else if (this.syncStatus === 'syncing') {
       indicatorEl.style.backgroundColor = '#0071E3';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(0, 113, 227, 0.25)';
@@ -233,7 +278,7 @@ export class GoogleSheetsService {
     } else if (this.syncStatus === 'connected') {
       indicatorEl.style.backgroundColor = '#34C759';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.2)';
-      descEl.textContent = 'Protetto & Connesso Live';
+      descEl.textContent = 'Connesso Live';
       if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
     } else if (this.syncStatus === 'error') {
       indicatorEl.style.backgroundColor = '#FF3B30';
