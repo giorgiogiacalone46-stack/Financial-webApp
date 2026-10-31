@@ -198,26 +198,57 @@ export class ImpostazioniView {
                 <span class="card-subtitle">Parametri Web App per il foglio 'Finanze - Movimenti'</span>
               </div>
               <span class="sheet-status-badge">
-                <span class="sheet-status-indicator" style="width: 8px; height: 8px;"></span>
-                <span class="sheet-status-desc">${googleSheetsService.isSandboxMode() ? 'Sandbox Protetto' : (config.isConfigured ? 'Connesso' : 'Pronto (Locale)')}</span>
+                <span class="sheet-status-indicator" style="width: 8px; height: 8px; background-color: ${googleSheetsService.isSandboxMode() ? 'var(--apple-orange)' : (config.isConfigured ? 'var(--apple-green)' : 'var(--apple-green)')};"></span>
+                <span class="sheet-status-desc">${googleSheetsService.isSandboxMode() ? '🛡️ Sandbox Protetto' : (config.isConfigured ? 'Connesso Live' : 'Pronto (Locale)')}</span>
               </span>
             </div>
 
-            <!-- Apple Sandbox Shield Banner -->
-            <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
-              <div style="color: var(--apple-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
-                ${getIcon('shield', 26)}
+            <!-- Apple Toggle: Sandbox Mode -->
+            <div class="settings-toggle-row">
+              <div class="toggle-label-group">
+                <strong>Modalità Sandbox (Protezione Database)</strong>
+                <span>${googleSheetsService.isBeta ? 'Attiva di default sul branch Beta per blindare il database reale durante i test e R&D.' : 'Blocca scritture ed eliminazioni sul foglio Google Sheets per simulazioni e test protetti.'}</span>
               </div>
-              <div style="flex: 1; min-width: 0;">
-                <div class="cluster-gap-xs mb-text-title">
-                  <strong style="color: var(--apple-green); font-size: 14px; font-weight: 600;">Protezione Database Reale Attiva (Beta Sandbox)</strong>
-                  <span style="background: rgba(52, 199, 89, 0.2); color: var(--apple-green); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Zero Scritture su Google Sheets</span>
-                </div>
-                <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
-                  In questa versione di prova, tutte le operazioni (creazione o eliminazione di movimenti, conguagli saldi, nuovi obiettivi o accorpamento categorie) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong>. Nessuna operazione di scrittura o cancellazione viene inviata al tuo foglio Google Sheets reale originale.
-                </p>
-              </div>
+              <label class="apple-switch" title="Attiva/Disattiva Modalità Sandbox">
+                <input type="checkbox" id="gas-sandbox-toggle" ${googleSheetsService.isSandboxMode() ? 'checked' : ''} />
+                <span class="switch-slider"></span>
+              </label>
             </div>
+
+            <!-- Apple Feedback Banner: Sandbox vs Live Sync -->
+            ${googleSheetsService.isSandboxMode() ? `
+              <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(255, 149, 0, 0.1); border: 1px solid rgba(255, 149, 0, 0.3); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
+                <div style="color: var(--apple-orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
+                  ${getIcon('shield', 26)}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div class="cluster-gap-xs mb-text-title">
+                    <strong style="color: var(--apple-orange); font-size: 14px; font-weight: 600;">Protezione Database Attiva (${googleSheetsService.isBeta ? 'Ambiente Beta' : 'Sandbox Mode'})</strong>
+                    <span style="background: rgba(255, 149, 0, 0.2); color: var(--apple-orange); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Zero Scritture su Google Sheets</span>
+                  </div>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
+                    ${googleSheetsService.isBeta 
+                      ? 'Sei sul branch di sviluppo Beta: tutte le operazioni (creazione o eliminazione movimenti, conguagli saldi, nuovi obiettivi) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong> per proteggere il tuo foglio Google Sheets reale.' 
+                      : 'In questa modalità protetta, tutte le operazioni (creazione o eliminazione di movimenti, conguagli saldi, nuovi obiettivi) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong>. Nessuna operazione di scrittura o cancellazione viene inviata al tuo foglio Google Sheets reale originale.'}
+                  </p>
+                </div>
+              </div>
+            ` : `
+              <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(52, 199, 89, 0.08); border: 1px solid rgba(52, 199, 89, 0.25); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
+                <div style="color: var(--apple-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
+                  ${getIcon('sync', 24)}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div class="cluster-gap-xs mb-text-title">
+                    <strong style="color: var(--apple-green); font-size: 14px; font-weight: 600;">Sincronizzazione Live Bidirezionale</strong>
+                    <span style="background: rgba(52, 199, 89, 0.2); color: var(--apple-green); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Database Produzione</span>
+                  </div>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
+                    L'app è collegata al tuo foglio Google Sheets reale: ogni nuovo movimento inserito, conguaglio o modifica viene sincronizzato e salvato istantaneamente sul cloud.
+                  </p>
+                </div>
+              </div>
+            `}
 
             <div class="settings-form-group">
               <label class="settings-label" for="gas-url-input">URL Applicazione Web (Google Apps Script)</label>
@@ -577,14 +608,24 @@ export class ImpostazioniView {
       });
     }
 
+    // Toggle Sandbox Mode
+    const sandboxToggle = document.getElementById('gas-sandbox-toggle');
+    if (sandboxToggle) {
+      sandboxToggle.addEventListener('change', (e) => {
+        googleSheetsService.setSandboxMode(e.target.checked);
+        this.render(container);
+      });
+    }
+
     // Sheets Config
     const btnSaveSheets = document.getElementById('btn-save-sheets-config');
     if (btnSaveSheets) {
       btnSaveSheets.addEventListener('click', () => {
         const url = document.getElementById('gas-url-input')?.value || '';
         const token = document.getElementById('gas-token-input')?.value || '';
-        googleSheetsService.saveConfig(url, token, true);
-        alert('Parametri di sincronizzazione salvati!');
+        const isSandbox = document.getElementById('gas-sandbox-toggle')?.checked ?? googleSheetsService.isSandboxMode();
+        googleSheetsService.saveConfig(url, token, true, isSandbox);
+        alert('Parametri di sincronizzazione salvati con successo!');
         this.render(container);
       });
     }

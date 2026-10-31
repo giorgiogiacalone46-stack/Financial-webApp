@@ -9,6 +9,7 @@ import subprocess
 import os
 
 FILES = [
+    'js/config/environment.js',
     'js/components/icons.js',
     'js/components/uiComponents.js',
     'js/data/realData.js',

@@ -47,6 +47,15 @@ Ogni nuova idea segue questo ciclo di vita:
 
 ### 📌 Voci di Registro
 
+- **[MERGE MAIN] Architettura Multi-Ambiente & Isolamento Produzione/Beta (Release v2026.16)**:
+  - **Autorizzazione & Requisito**: Giorgio ha formalizzato il principio costitutivo: il ramo `main` (produzione) deve sincronizzarsi direttamente con Google Sheets senza alcun blocco, mentre il ramo `beta` (sviluppo) deve sfruttare automaticamente la Sandbox per proteggere il database reale da modifiche durante i test.
+  - **Implementazione Architetturale**:
+    1. *Modulo di Configurazione Ambiente (`js/config/environment.js`)*: File di configurazione dedicato che definisce `branch`, `isBeta`, `defaultSandboxMode`, `appName` e `statusDesc` specifici per ciascun ramo.
+    2. *Rilevamento Intelligente Host & Branch (`googleSheetsService.js`)*: L'host di produzione cloud (*.github.io) e il ramo `main` disattivano sempre la Sandbox di default, consentendo la scrittura live e trasparente su Google Sheets. Il ramo `beta` (localhost / file://) attiva automaticamente la Sandbox.
+    3. *Apple Toggle Switch in Impostazioni*: Aggiunto uno switch nativo Apple (`.apple-switch`) nel tab "Google Sheets" per consentire all'utente di alternare la modalità Sandbox con un tocco e con feedback visivo reattivo.
+    4. *Isolamento Permanente via Release Script (`scripts/release_to_main.py`)*: Script automatizzato di merge che garantisce che ogni futura promozione da `beta` a `main` configuri automaticamente `main` in modalità produzione (isBeta: false, diciture "Finanze - Movimenti" e "Dati Sincronizzati", bundle ricompilato) senza sovrascrivere o sporcare la configurazione.
+  - **Validazione**: Sintassi e Runtime JSC validati a 0 errori. Main e Beta collaudati con successo. [2026-10-31]
+
 - **[MERGE MAIN] Promozione Ufficiale a Produzione — Release v2026.15**:
   - **Autorizzazione**: Approvazione esplicita ricevuta da Giorgio per il merge su `main` e rilascio in produzione della versione stabile definitiva.
   - **Sintesi del Rilascio Ufficiale**:

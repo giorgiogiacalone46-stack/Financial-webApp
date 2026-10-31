@@ -1,6 +1,25 @@
 (function() {
 "use strict";
 
+// === js/config/environment.js ===
+/**
+ * Configurazione Ambiente Applicazione
+ * Branch: beta (Laboratorio R&D / Sviluppo Attivo)
+ * 
+ * Regola Costituzionale:
+ * - In beta: Sandbox attiva di default per proteggere il database reale da qualsiasi scrittura.
+ * - In main (produzione): Sincronizzazione reale attiva di default con Google Sheets.
+ */
+
+const APP_ENV = {
+  branch: 'beta',
+  isBeta: true,
+  defaultSandboxMode: true,
+  appName: 'Finanze (Beta Sandbox)',
+  statusDesc: '🛡️ Database Protetto',
+  mobileText: '🛡️ Sandbox'
+};
+
 // === js/components/icons.js ===
 /**
  * Apple Design System - Centralized Vector Linear Iconography (SF Symbols Style)
@@ -12165,6 +12184,7 @@ if (typeof window !== 'undefined') {
  * Google Sheets API Service - Client Adattatore Reale
  */
 
+
 const SHEETS_STORAGE_KEYS = {
   WEB_APP_URL: 'finanze_gas_url',
   SECURITY_TOKEN: 'finanze_gas_token',
@@ -12178,8 +12198,25 @@ class GoogleSheetsService {
     this.webAppUrl = localStorage.getItem(SHEETS_STORAGE_KEYS.WEB_APP_URL) || '';
     this.securityToken = localStorage.getItem(SHEETS_STORAGE_KEYS.SECURITY_TOKEN) || '';
     this.autoSync = localStorage.getItem(SHEETS_STORAGE_KEYS.AUTO_SYNC) !== 'false';
-    // Sandbox Mode: default TRUE in beta per proteggere il database reale da qualsiasi scrittura
-    this.sandboxMode = localStorage.getItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE) !== 'false';
+
+    // Rilevamento automatico dell'ambiente:
+    // 1. Host GitHub Pages (*.github.io): è la produzione cloud ufficiale (main) -> Sandbox disattivata di default.
+    // 2. Altrimenti legge il branch corrente (APP_ENV.isBeta):
+    //    - Su branch 'beta': Sandbox ATTIVA di default per blindare il database reale durante test e R&D.
+    //    - Su branch 'main': Sandbox DISATTIVATA di default per sincronizzare direttamente su Google Sheets.
+    const isProductionHost = typeof window !== 'undefined' && Boolean(window.location && typeof window.location.hostname === 'string' && window.location.hostname.includes('github.io'));
+    const isBetaEnvironment = !isProductionHost && (typeof APP_ENV !== 'undefined' ? APP_ENV.isBeta : false);
+
+    this.isBeta = isBetaEnvironment;
+
+    // Preferenza utente salvata in localStorage (ha precedenza se impostata esplicitamente tramite switch nelle Impostazioni)
+    const storedSandbox = localStorage.getItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE);
+    if (storedSandbox !== null) {
+      this.sandboxMode = storedSandbox === 'true';
+    } else {
+      this.sandboxMode = isBetaEnvironment;
+    }
+
     this.isOnline = navigator.onLine;
     this.syncStatus = 'idle';
 
@@ -12201,11 +12238,11 @@ class GoogleSheetsService {
     return Boolean(this.webAppUrl && this.webAppUrl.startsWith('https://script.google.com/macros/s/'));
   }
 
-  saveConfig(url, token, autoSync = true, sandboxMode = true) {
+  saveConfig(url, token, autoSync = true, sandboxMode = this.sandboxMode) {
     this.webAppUrl = url.trim();
     this.securityToken = token.trim();
     this.autoSync = autoSync;
-    this.sandboxMode = sandboxMode;
+    this.sandboxMode = Boolean(sandboxMode);
 
     localStorage.setItem(SHEETS_STORAGE_KEYS.WEB_APP_URL, this.webAppUrl);
     localStorage.setItem(SHEETS_STORAGE_KEYS.SECURITY_TOKEN, this.securityToken);
@@ -12417,11 +12454,11 @@ class GoogleSheetsService {
     if (!indicatorEl || !descEl) return;
 
     if (this.sandboxMode) {
-      indicatorEl.style.backgroundColor = '#34C759';
-      indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.25)';
-      if (nameEl) nameEl.textContent = 'Finanze (Beta Sandbox)';
-      descEl.textContent = '🛡️ Database Protetto';
-      if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
+      indicatorEl.style.backgroundColor = '#FF9500';
+      indicatorEl.style.boxShadow = '0 0 0 3px rgba(255, 149, 0, 0.25)';
+      if (nameEl) nameEl.textContent = this.isBeta ? 'Finanze (Beta Sandbox)' : 'Finanze (Sandbox)';
+      descEl.textContent = this.isBeta ? '🛡️ Database Protetto' : '🛡️ Sandbox Protetto';
+      if (mobilePill) mobilePill.style.backgroundColor = '#FF9500';
       if (mobileText) mobileText.textContent = '🛡️ Sandbox';
       return;
     }
@@ -12436,18 +12473,24 @@ class GoogleSheetsService {
     } else if (this.syncStatus === 'syncing') {
       indicatorEl.style.backgroundColor = '#0071E3';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(0, 113, 227, 0.25)';
+      if (nameEl) nameEl.textContent = 'Finanze - Movimenti';
       descEl.textContent = 'Sincronizzazione...';
       if (mobilePill) mobilePill.style.backgroundColor = '#0071E3';
+      if (mobileText) mobileText.textContent = 'Sync...';
     } else if (this.syncStatus === 'connected') {
       indicatorEl.style.backgroundColor = '#34C759';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(52, 199, 89, 0.2)';
+      if (nameEl) nameEl.textContent = 'Finanze - Movimenti';
       descEl.textContent = 'Connesso Live';
       if (mobilePill) mobilePill.style.backgroundColor = '#34C759';
+      if (mobileText) mobileText.textContent = 'Connesso';
     } else if (this.syncStatus === 'error') {
       indicatorEl.style.backgroundColor = '#FF3B30';
       indicatorEl.style.boxShadow = '0 0 0 3px rgba(255, 59, 48, 0.2)';
+      if (nameEl) nameEl.textContent = 'Finanze - Movimenti';
       descEl.textContent = 'Errore Connessione';
       if (mobilePill) mobilePill.style.backgroundColor = '#FF3B30';
+      if (mobileText) mobileText.textContent = 'Offline';
     }
   }
 }
@@ -18878,26 +18921,57 @@ class ImpostazioniView {
                 <span class="card-subtitle">Parametri Web App per il foglio 'Finanze - Movimenti'</span>
               </div>
               <span class="sheet-status-badge">
-                <span class="sheet-status-indicator" style="width: 8px; height: 8px;"></span>
-                <span class="sheet-status-desc">${googleSheetsService.isSandboxMode() ? 'Sandbox Protetto' : (config.isConfigured ? 'Connesso' : 'Pronto (Locale)')}</span>
+                <span class="sheet-status-indicator" style="width: 8px; height: 8px; background-color: ${googleSheetsService.isSandboxMode() ? 'var(--apple-orange)' : (config.isConfigured ? 'var(--apple-green)' : 'var(--apple-green)')};"></span>
+                <span class="sheet-status-desc">${googleSheetsService.isSandboxMode() ? '🛡️ Sandbox Protetto' : (config.isConfigured ? 'Connesso Live' : 'Pronto (Locale)')}</span>
               </span>
             </div>
 
-            <!-- Apple Sandbox Shield Banner -->
-            <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
-              <div style="color: var(--apple-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
-                ${getIcon('shield', 26)}
+            <!-- Apple Toggle: Sandbox Mode -->
+            <div class="settings-toggle-row">
+              <div class="toggle-label-group">
+                <strong>Modalità Sandbox (Protezione Database)</strong>
+                <span>${googleSheetsService.isBeta ? 'Attiva di default sul branch Beta per blindare il database reale durante i test e R&D.' : 'Blocca scritture ed eliminazioni sul foglio Google Sheets per simulazioni e test protetti.'}</span>
               </div>
-              <div style="flex: 1; min-width: 0;">
-                <div class="cluster-gap-xs mb-text-title">
-                  <strong style="color: var(--apple-green); font-size: 14px; font-weight: 600;">Protezione Database Reale Attiva (Beta Sandbox)</strong>
-                  <span style="background: rgba(52, 199, 89, 0.2); color: var(--apple-green); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Zero Scritture su Google Sheets</span>
-                </div>
-                <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
-                  In questa versione di prova, tutte le operazioni (creazione o eliminazione di movimenti, conguagli saldi, nuovi obiettivi o accorpamento categorie) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong>. Nessuna operazione di scrittura o cancellazione viene inviata al tuo foglio Google Sheets reale originale.
-                </p>
-              </div>
+              <label class="apple-switch" title="Attiva/Disattiva Modalità Sandbox">
+                <input type="checkbox" id="gas-sandbox-toggle" ${googleSheetsService.isSandboxMode() ? 'checked' : ''} />
+                <span class="switch-slider"></span>
+              </label>
             </div>
+
+            <!-- Apple Feedback Banner: Sandbox vs Live Sync -->
+            ${googleSheetsService.isSandboxMode() ? `
+              <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(255, 149, 0, 0.1); border: 1px solid rgba(255, 149, 0, 0.3); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
+                <div style="color: var(--apple-orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
+                  ${getIcon('shield', 26)}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div class="cluster-gap-xs mb-text-title">
+                    <strong style="color: var(--apple-orange); font-size: 14px; font-weight: 600;">Protezione Database Attiva (${googleSheetsService.isBeta ? 'Ambiente Beta' : 'Sandbox Mode'})</strong>
+                    <span style="background: rgba(255, 149, 0, 0.2); color: var(--apple-orange); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Zero Scritture su Google Sheets</span>
+                  </div>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
+                    ${googleSheetsService.isBeta 
+                      ? 'Sei sul branch di sviluppo Beta: tutte le operazioni (creazione o eliminazione movimenti, conguagli saldi, nuovi obiettivi) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong> per proteggere il tuo foglio Google Sheets reale.' 
+                      : 'In questa modalità protetta, tutte le operazioni (creazione o eliminazione di movimenti, conguagli saldi, nuovi obiettivi) <strong>restano al 100% fittizie e confinate in locale sul tuo browser</strong>. Nessuna operazione di scrittura o cancellazione viene inviata al tuo foglio Google Sheets reale originale.'}
+                  </p>
+                </div>
+              </div>
+            ` : `
+              <div class="sandbox-shield-banner" style="display: flex; gap: var(--space-box-gap-sm); align-items: flex-start; background: rgba(52, 199, 89, 0.08); border: 1px solid rgba(52, 199, 89, 0.25); border-radius: var(--radius-lg); padding: var(--space-card-pad-sm) var(--space-card-pad); margin-bottom: var(--space-box-gap-lg);">
+                <div style="color: var(--apple-green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 2px;">
+                  ${getIcon('sync', 24)}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div class="cluster-gap-xs mb-text-title">
+                    <strong style="color: var(--apple-green); font-size: 14px; font-weight: 600;">Sincronizzazione Live Bidirezionale</strong>
+                    <span style="background: rgba(52, 199, 89, 0.2); color: var(--apple-green); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">Database Produzione</span>
+                  </div>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); line-height: var(--lh-body); margin: 0;">
+                    L'app è collegata al tuo foglio Google Sheets reale: ogni nuovo movimento inserito, conguaglio o modifica viene sincronizzato e salvato istantaneamente sul cloud.
+                  </p>
+                </div>
+              </div>
+            `}
 
             <div class="settings-form-group">
               <label class="settings-label" for="gas-url-input">URL Applicazione Web (Google Apps Script)</label>
@@ -19257,14 +19331,24 @@ class ImpostazioniView {
       });
     }
 
+    // Toggle Sandbox Mode
+    const sandboxToggle = document.getElementById('gas-sandbox-toggle');
+    if (sandboxToggle) {
+      sandboxToggle.addEventListener('change', (e) => {
+        googleSheetsService.setSandboxMode(e.target.checked);
+        this.render(container);
+      });
+    }
+
     // Sheets Config
     const btnSaveSheets = document.getElementById('btn-save-sheets-config');
     if (btnSaveSheets) {
       btnSaveSheets.addEventListener('click', () => {
         const url = document.getElementById('gas-url-input')?.value || '';
         const token = document.getElementById('gas-token-input')?.value || '';
-        googleSheetsService.saveConfig(url, token, true);
-        alert('Parametri di sincronizzazione salvati!');
+        const isSandbox = document.getElementById('gas-sandbox-toggle')?.checked ?? googleSheetsService.isSandboxMode();
+        googleSheetsService.saveConfig(url, token, true, isSandbox);
+        alert('Parametri di sincronizzazione salvati con successo!');
         this.render(container);
       });
     }
