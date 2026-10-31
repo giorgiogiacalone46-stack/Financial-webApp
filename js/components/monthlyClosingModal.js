@@ -57,17 +57,21 @@ export class MonthlyClosingModal {
     const status = financeStore.getMonthlyReconciliationStatus(this.targetMonth);
     const accounts = financeStore.getAccounts();
     const currentNW = financeStore.summary.netWorth;
+    const savedClosing = financeStore.getMonthlyClosing(this.targetMonth);
 
-    // Inizializza lo stato degli input se non presente
+    // Inizializza lo stato degli input con i dati salvati di quel fine mese se disponibili
     this.accountInputs.clear();
     accounts.forEach(acc => {
       const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension');
       const defaultMode = acc.defaultMode || (isPension ? 'delta' : 'balance');
+      const savedBal = savedClosing?.accounts?.[acc.name];
+      const hasSaved = typeof savedBal === 'number';
+
       this.accountInputs.set(acc.name, {
         mode: defaultMode,
-        rawInputValue: '',
-        value: 0,
-        isModified: false,
+        rawInputValue: hasSaved ? String(savedBal) : '',
+        value: hasSaved ? savedBal : 0,
+        isModified: hasSaved,
         createTx: true,
         note: isPension 
           ? `Versamento Fondo Pensione Busta Paga (${status.targetMonthName})` 
@@ -75,12 +79,22 @@ export class MonthlyClosingModal {
       });
     });
 
-    const monthOptions = [
-      { key: '10/2026', label: 'Ottobre 2026' },
-      { key: '09/2026', label: 'Settembre 2026' },
-      { key: '08/2026', label: 'Agosto 2026' },
-      { key: '11/2026', label: 'Novembre 2026' }
+    let tYear = 2026;
+    if (this.targetMonth && this.targetMonth.includes('/')) {
+      const parts = this.targetMonth.split('/');
+      tYear = parseInt(parts[1], 10) || 2026;
+    }
+
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
     ];
+
+    const monthOptions = [];
+    for (let m = 1; m <= 12; m++) {
+      const key = `${String(m).padStart(2, '0')}/${tYear}`;
+      monthOptions.push({ key, label: `${monthNames[m - 1]} ${tYear}` });
+    }
 
     modalRoot.innerHTML = `
       <div class="apple-modal-overlay open" id="monthly-closing-overlay">
@@ -175,10 +189,15 @@ export class MonthlyClosingModal {
   renderAccountRow(acc, status) {
     const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension');
     const isInvestment = acc.isInvestment || acc.id === 'xeon' || acc.id === 'vwce' || (acc.name || '').toLowerCase().includes('xeon') || (acc.name || '').toLowerCase().includes('vwce');
-    const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
+    const recMonth = acc.lastReconciledMonth || '10/2026';
     const isStale = (recMonth !== this.targetMonth);
     const defaultMode = acc.defaultMode || (isPension ? 'delta' : 'balance');
     const isFocused = this.focusAccount && this.focusAccount.toLowerCase() === acc.name.toLowerCase();
+
+    const savedClosing = financeStore.getMonthlyClosing(this.targetMonth);
+    const savedBal = savedClosing?.accounts?.[acc.name];
+    const initialInputVal = (typeof savedBal === 'number' && defaultMode === 'balance') ? savedBal : '';
+    const displayedBal = (typeof savedBal === 'number') ? savedBal : acc.balance;
 
     return `
       <div class="reconcile-card ${isStale ? 'reconcile-stale' : ''} ${isFocused ? 'reconcile-focused' : ''}" data-account="${acc.name}" style="background: var(--bg-card); border: 1px solid ${isStale ? 'rgba(255, 149, 0, 0.4)' : 'var(--border-subtle)'}; border-radius: var(--radius-md); padding: 14px 16px;">
@@ -200,7 +219,7 @@ export class MonthlyClosingModal {
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 12px; color: var(--text-secondary);">Attuale:</span>
             <strong class="privacy-mask" style="font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums;">
-              ${this.formatCurrency(acc.balance)}
+              ${this.formatCurrency(displayedBal)}
             </strong>
             <span style="font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 9999px; background: ${isStale ? 'rgba(255, 149, 0, 0.15)' : 'rgba(52, 199, 89, 0.15)'}; color: ${isStale ? 'var(--apple-orange)' : 'var(--apple-green)'};">
               ${isStale ? `Fermo a ${acc.lastMonthName || 'mese prec.'}` : 'Allineato'}
@@ -235,8 +254,9 @@ export class MonthlyClosingModal {
                 class="apple-input input-reconcile-val" 
                 id="input-val-${acc.name}" 
                 data-account="${acc.name}"
-                data-old-balance="${acc.balance}"
-                placeholder="${defaultMode === 'delta' ? (isPension ? '+ es. 185,50' : '+/- es. 50,00') : this.formatCurrency(acc.balance)}" 
+                data-old-balance="${displayedBal}"
+                value="${initialInputVal !== '' ? initialInputVal : ''}"
+                placeholder="${defaultMode === 'delta' ? (isPension ? '+ es. 185,50' : '+/- es. 50,00') : this.formatCurrency(displayedBal)}" 
                 style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;"
               />
             </div>
@@ -450,6 +470,9 @@ export class MonthlyClosingModal {
   handleSaveClosing() {
     const updates = [];
     const accounts = financeStore.getAccounts();
+    const now = new Date();
+    const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const isCurrentMonth = (this.targetMonth === curMonthKey);
 
     accounts.forEach(acc => {
       const data = this.accountInputs.get(acc.name);
@@ -469,15 +492,43 @@ export class MonthlyClosingModal {
       return;
     }
 
-    const res = financeStore.executeMonthlyClosing(this.targetMonth, updates);
+    if (isCurrentMonth) {
+      const res = financeStore.executeMonthlyClosing(this.targetMonth, updates);
+      alert(`✅ Chiusura di ${res.monthName} consolidata con successo!\n\nPatrimonio Net Worth aggiornato a ${this.formatCurrency(res.newTotalNW)} (${res.nwDelta >= 0 ? '+' : ''}${this.formatCurrency(res.nwDelta)}).\n${res.modifiedAccounts.length} conti allineati.`);
+      this.close();
+      if (typeof this.onSuccessCallback === 'function') {
+        this.onSuccessCallback(res);
+      }
+    } else {
+      // Modifica / Rettifica fine mese passato o futuro nel Foglio Gestionale
+      const existingClosing = financeStore.getMonthlyClosing(this.targetMonth) || { accounts: {} };
+      const newAccounts = { ...(existingClosing.accounts || {}) };
 
-    // Mostra feedback visivo di successo
-    alert(`✅ Chiusura di ${res.monthName} consolidata con successo!\n\nPatrimonio Net Worth aggiornato a ${this.formatCurrency(res.newTotalNW)} (${res.nwDelta >= 0 ? '+' : ''}${this.formatCurrency(res.nwDelta)}).\n${res.modifiedAccounts.length} conti allineati.`);
+      updates.forEach(u => {
+        const oldBal = parseFloat(newAccounts[u.accountName]) || 0;
+        if (u.mode === 'delta') {
+          newAccounts[u.accountName] = Math.round((oldBal + parseFloat(u.value)) * 100) / 100;
+        } else {
+          newAccounts[u.accountName] = Math.round(parseFloat(u.value) * 100) / 100;
+        }
+      });
 
-    this.close();
+      const totalNW = Math.round(Object.values(newAccounts).reduce((sum, b) => sum + (parseFloat(b) || 0), 0) * 100) / 100;
 
-    if (typeof this.onSuccessCallback === 'function') {
-      this.onSuccessCallback(res);
+      financeStore.saveMonthlyClosingData(this.targetMonth, {
+        monthKey: this.targetMonth,
+        label: this.targetMonth,
+        date: `31/${this.targetMonth}`,
+        accounts: newAccounts,
+        totalNW,
+        notes: `Rettifica fine mese ${this.targetMonth}`
+      });
+
+      alert(`✅ Fine mese di ${this.targetMonth} aggiornato con successo!\n\nPatrimonio Net Worth ricalcolato a ${this.formatCurrency(totalNW)}.`);
+      this.close();
+      if (typeof this.onSuccessCallback === 'function') {
+        this.onSuccessCallback({ success: true, targetMonthKey: this.targetMonth, newTotalNW: totalNW });
+      }
     }
   }
 }

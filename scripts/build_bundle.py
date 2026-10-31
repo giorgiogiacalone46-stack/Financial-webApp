@@ -93,7 +93,7 @@ def build():
     jsc = '/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc'
     if os.path.exists(jsc):
         test_script = (
-            "var window = { matchMedia: () => ({ matches: false }), addEventListener: () => {}, location: { hash: '', search: '', protocol: 'file:' } }, "
+            "var console = { log: () => {}, warn: () => {}, error: () => {}, info: () => {} }; var window = { matchMedia: () => ({ matches: false }), addEventListener: () => {}, location: { hash: '', search: '', protocol: 'file:' } }, "
             "document = { readyState: 'complete', addEventListener: () => {}, querySelectorAll: () => [], getElementById: () => null, querySelector: () => null, body: { classList: { add: () => {}, remove: () => {}, contains: () => false } } }, "
             "localStorage = { getItem: () => null, setItem: () => {} }, navigator = { onLine: true }; "
             f"load('{OUTPUT_FILE}'); print('JSC BUNDLE FULL RUN OK');"

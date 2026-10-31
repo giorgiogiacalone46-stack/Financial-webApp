@@ -676,12 +676,12 @@ export class ImpostazioniView {
 
         try {
           const data = await googleSheetsService.fetchAllData();
-          if (data && data.transactions) {
-            financeStore.setTransactions(data.transactions);
-            if (data.saldi) {
-              data.saldi.forEach(s => {
-                financeStore.updateAccountBalance(s.name, s.balance);
-              });
+          if (data) {
+            if (data.transactions && data.transactions.length > 0) {
+              financeStore.setTransactions(data.transactions);
+            }
+            if (data.saldi && data.saldi.length > 0) {
+              financeStore.syncSaldiFromCloud(data.saldi);
             }
             if (feedbackEl) {
               feedbackEl.className = 'connection-feedback success';

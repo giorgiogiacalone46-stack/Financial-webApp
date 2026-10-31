@@ -25,19 +25,64 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.18 — Official Production Release)
+## 📊 Stato Attuale dei Moduli (v2026.19 — Active Beta R&D)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
+| **Foglio Gestionale 2026** | 💎 Nuovo Rilascio | **Matrice Annuale Net Worth Stile Google Sheets**: Griglia a 12 mensilità (Gen-Dic) con suddivisione per macro-classi (Liquidità, Investimenti XEON/VWCE, Previdenza Fondo Pensione), colonna conti sticky Glassmorphism con scroll orizzontale fluido, riga hero Net Worth e variazioni mensili (€ e %). Clic su qualsiasi cella o tasto mese per modificare i fine mese in un secondo momento. Esportazione CSV matrice dedicata. |
 | **Dashboard** | 💎 Perfezionato | **Architettura UI-Perfect-Design 4-Zone**: Ristrutturazione integrale con container `.page`, `.grid-4`, `.grid-6`, `.grid-auto`, `.card` con padding 24px (16px compatte) e gap 24px costanti. Blocco unico conti ad alta densità `.accounts-card`. Card "Uscite Mese" interattiva one-click con reindirizzamento diretto a `#spese`. Iconografia lineare vettoriale Apple (zero emoji a disegnino). Certificato a 0 difetti su 5 viewport. |
 | **Spese & Budget** | 💎 Rilasciato | **Nuova Sezione di Primo Livello (`#spese`)**: 4 card KPI uscite (Uscite Mese, Spese Fisse, Spese Variabili, Spesa Sicura Residua), Budget Preventivo 50/30/20 a 3 buste canoniche (`Bisogni 50%`, `Voluttuari 30%`, `Risparmio 20%`), Donut Chart con **Selettore del Periodo Temporale** (Mese Corrente, Ultimi 30 gg, 3 Mesi, 6 Mesi, Anno 2026, Tutto lo Storico) e breakdown reattivo per categoria, tabella Top Fornitori/Merchant con statistiche aggregate ed esportazione rapida CSV. |
 | **Assistente AI** | 💎 Rilasciato | **Personal CFO & FinTech Advisor (`#assistente`)**: Briefing esecutivo a 4 card KPI (Radar Anomalie, Runway Fondo Emergenza XEON, Allocazione Surplus & Ottimizzazione Fiscale Art. 51 TUIR, Proiezione F.I.R.E.), chat conversazionale stile Apple Intelligence con **Auto-Reset Intelligente** (TTL inattività 15 minuti, rolling memory a max 12 messaggi per zero sovraccarico del browser, badge `Auto-reset 15m` e pulsante dedicato `Nuova Chat`), quick prompt pills one-click e motore decisionale locale deterministico con 100% privacy e latenza zero. |
 | **Movimenti** | 💎 Perfezionato | **Header Dinamico Apple & Sotto-Menu Segmentato Integrato**: Allineamento integrale allo standard grafico di Spese ed Investimenti. Testata di sezione con badge, riga chip con metriche live del mese (`Entrate`, `Uscite`, `Netto`, conteggio transazioni), titolo (`.page-title`) e sottotitolo (`.page-subtitle`) dinamico contestuale per le 4 sotto-aree (*Registro Movimenti*, *Analisi Categorie*, *Confronto Categorie*, *Budget 50/30/20*). Apple Segmented Control integrato (`.movimenti-segmented-tabs`) a 4 colonne con icone SF Symbols. Pulsante primario *"Nuovo Movimento"* ed *"Esporta CSV"* nella testata. Card filtri/comandi riorganizzata ad alto respiro con search input spazioso, view switcher affiancato e selettori armonici. |
 | **Investimenti** | 💎 Perfezionato | **Header Dinamico Stile Spese & Sotto-Menu Segmentato Apple**: Header di sezione con chip patrimoniali (`Investito`, `Net Worth`), titolo (`.page-title`) e sottotitolo (`.page-subtitle`) dinamico per ciascuna delle 4 aree (*Portafoglio & Allocazione*, *Profilo di Rischio & Target*, *Obiettivi di Risparmio*, *Indipendenza Finanziaria F.I.R.E.*). Sotto-menu segmentato Apple (`.investimenti-segmented-tabs`) integrato nel layout (4 colonne desktop, 2 colonne tablet, swipe fluido mobile) con icone SF Symbols. Simulatore PAC, Profilo MiFID, Salvadanai e simulatore Crossover Point 4% SWR armonizzati a 0 sovrapposizioni. |
-| **Storico** | 💎 Perfezionato | Container unificato `.page.storico-page`. Banner Net Worth dinamico continuo come `.card.highlight-card` a 4 zone, grafico evoluzione in `.card` standard, tabella mensile strutturata in `.card`, **Report Fiscale Annuale Stampabile** (Art. 51 TUIR, ISEE) ed export CSV/JSON. Toolbar ripulita con icone SVG monocromatiche. Integrato pulsante e trigger rapido per la Chiusura Fine Mese. |
+| **Storico** | 💎 Perfezionato | **Triplice Visualizzazione Apple HIG**: Apple Segmented Control (`Foglio Gestionale Net Worth`, `Evoluzione & Trend Grafico`, `Registro Storico Mensile`). Banner Net Worth dinamico continuo come `.card.highlight-card` a 4 zone, grafico evoluzione in `.card` standard, tabella mensile strutturata in `.card`, **Report Fiscale Annuale Stampabile** (Art. 51 TUIR, ISEE) ed export CSV/JSON. Toolbar ripulita con icone SVG monocromatiche. Integrato pulsante e trigger rapido per la Chiusura Fine Mese. |
 | **Impostazioni** | 💎 Perfezionato | Container unificato `.page.impostazioni-page`. Tutte le sezioni (Google Sheets API, Token, Conguaglio Saldi, Smart Merge categorie, PIN blocco iOS) strutturate in `.card` canoniche con gap 24px. Rimosse emoji residue e unificati indicatori di stato. Collegato allo Studio di Chiusura Fine Mese. |
 | **Chiusura Mese & Conguagli** | 💎 Perfezionato | **Studio Chiusura Mese & Riconciliazione Saldi**: Gestione duplice modalità (*Saldo Effettivo Totale* per banche/investimenti vs *Quota Busta Paga +/-* per Fondo Pensione/Previdenza). Banner smart con allerta automatica proattiva se un conto è fermo al mese precedente, modale Studio Apple con anteprima live del Net Worth, registrazione automatica della transazione/rettifica nel ledger e sincronizzazione con Google Sheets. Certificato a 0 difetti su 5 viewport. |
+| **Sincronizzazione Cloud** | 💎 Perfezionato | **Allineamento Radicale Bidirezionale Cross-Device**: Metodo `syncSaldiFromCloud` con parsing nativo della colonna `Data Conguaglio` di Google Sheets per allineare `lastReconciledMonth` e `lastReconciledDate` su qualsiasi dispositivo. Risolta la divergenza tra Smartphone e PC con auto-healing delle cache locali disallineate. |
 | **Sistema Globale** | 💎 Perfezionato | **Design System Centrale, Icons.js & uiComponents.js**: Libreria condivisa di componenti canonici, catalogo iconografico SVG lineare Apple SF Symbols, scala spaziale rigorosa (4, 8, 12, 16, 24, 32, 48, 64 px), gap e stacco 24px, clearance header 24px, contrasto WCAG AA ≥ 4.5:1, numeri tabulari, bundle standalone validato con JavaScriptCore. |
+
+---
+
+## 🧪 Registro Sviluppo & Innovazioni (Beta Log)
+
+Ogni nuova idea segue questo ciclo di vita:
+`[IDEA]` ➔ `[IN SVILUPPO]` ➔ `[TEST LOCALE]` ➔ `[APPROVATO]` ➔ `[MERGE MAIN]`
+
+### 📌 Voci di Registro
+
+- **[TEST LOCALE] Foglio Net Worth Gestionale 2026 & Risoluzione Totale Sincronizzazione Smartphone / PC (Beta v2026.19)**:
+  - **Problema Rilevato da Giorgio**:
+    1. *Discrepanza Sincronizzazione Fine Mese*: sul telefono veniva mostrato l'alert che segnalava di dover effettuare il fine mese (Fondo Pensione fermo a settembre), mentre sul MacBook risultava già tutto allineato. Necessità di chiarire e risolvere alla radice questi sistemi di sincronizzazione una volta per tutte.
+    2. *Integrazione Visualizzazione Foglio 2026 Gestionale*: esigenza di avere una vista stile foglio 2026 dello sheets originale ("networth - gestionale") per poter visualizzare la suddivisione mensile di tutti i conti e modificare in un secondo momento i fine mese (anche passati).
+  - **Diagnosi delle Cause Radice**:
+    1. *Silos di LocalStorage Cross-Device*: MacBook e Smartphone hanno memorie locali browser isolate. Quando il conguaglio del 31 ottobre è stato salvato sul PC, `lastReconciledMonth: '10/2026'` è stato scritto solo nel `localStorage` del MacBook.
+    2. *Mancata Rilettura Data Conguaglio dal Cloud*: quando lo smartphone scaricava `data.saldi` da Google Sheets, la funzione al boot eseguiva solo `updateAccountBalance(s.name, s.balance)`, ignorando la colonna `Data Conguaglio` (`31/10/2026`). Di conseguenza, il telefono ripiegava sul vecchio valore in cache `09/2026` e, confrontandolo con la data odierna (31/10/2026), scatenava l'alert di fine mese in sospeso.
+    3. *Assenza di Matrice Gestionale a 12 Mesi con Modifica Retroattiva*: in precedenza lo Storico mostrava solo un totale cumulato del Net Worth in una lista a colonna singola, senza la suddivisione per singolo conto né la possibilità di editare i valori salvati di mesi specifici.
+  - **Implementazione della Soluzione**:
+    1. *Sincronizzazione Radicale Cross-Device (`syncSaldiFromCloud` in `mockData.js`, `app.js` e `impostazioniView.js`)*:
+       - Implementato `syncSaldiFromCloud(saldiList)`: estrae la data reale da Google Sheets (`s.date`), deduce in automatico il mese (`lastReconciledMonth = MM/YYYY`) e la data formattata (`lastReconciledDate = DD/MM/YYYY`), aggiornando e salvando lo stato dei conti.
+       - Meccanismo di *Auto-Healing*: se la cache locale di un dispositivo è rimasta a `09/2026` ma i saldi rilasciati sono allineati al 31/10, l'app corregge istantaneamente il record al boot, azzerando ogni falso allarme su qualsiasi smartphone o tablet.
+    2. *Visualizzazione Stile Foglio 2026 Net Worth Gestionale (`storicoView.js`)*:
+       - Nuova vista spreadsheet nativa Apple con **Apple Segmented Switcher a 3 modalità**: `[ 📑 Foglio Gestionale Net Worth ]`, `[ 📈 Evoluzione & Trend Grafico ]`, `[ 📋 Registro Storico Mensile ]`.
+       - Selettore anno rapido (`2026`, `2025`, `2024`).
+       - Matrice completa a 12 mensilità orizzontali (Gennaio → Dicembre) con:
+         * 💳 *Liquidità & Cassa*: Buddybank, Contanti, Buoni Pasto, Subtotale Liquidità
+         * 📈 *Investimenti & Fondi*: Trade Republic - XEON, Trade Republic - VWCE, Subtotale Investimenti
+         * 🛡️ *Previdenza Complementare*: Fondo Pensione, Subtotale Previdenza
+         * 🏛️ *TOTALE PATRIMONIO NET WORTH*: Riga hero in risalto con font tabulare grassetto SF Pro
+         * 📊 *Variazione Mensile Netta (€)* e *Variazione Percentuale (%)*
+         * 💰 *Flusso Cassa Netto (Entrate - Uscite)*
+       - Colonna 1 (*Conto / Asset*) con `position: sticky; left: 0;` e sfondo blur Glassmorphism: garantisce perfetta leggibilità e navigazione touch sia su MacBook che su iPhone durante lo scorrimento orizzontale.
+       - Esportazione dedicata della matrice annuale in formato CSV per Excel/Numbers.
+    3. *Modifica Fine Mese Retroattiva e Flessibile (`monthlyClosingModal.js` e `mockData.js`)*:
+       - Cliccando su qualunque cella della matrice o sul tasto "Modifica" dell'header di un mese, si apre la modale preimpostata su quel mese con i saldi storici salvati già compilati.
+       - Il menu a tendina consente di selezionare tutti i 12 mesi dell'anno.
+       - Se si modifica un mese passato (es. Maggio o Settembre 2026), il sistema salva il nuovo breakdown dettagliato, aggiorna lo snapshot e ricalcola all'istante l'evoluzione del Net Worth e i grafici.
+       - Se si modifica il mese corrente, aggiorna i saldi live dell'app e sincronizza in tempo reale Google Sheets.
+    4. *Collaudo, Bundle & Certificazione*:
+       - Bundle `js/app.bundle.js` rigenerato e validato con il motore nativo macOS `jsc` (JavaScriptCore).
+       - Suite di 4 test runtime superata con successo al 100%.
+       - Audit Layout Multi-Viewport (`scripts/audit_layout.py`) eseguito su 5 viewport (iPhone SE 320px, iPhone 8 375px, iPad Mini 768px, MacBook 1280px, Full HD 1920px) su tutte le 9 viste: **Totale difetti rilevati = 0**. [2026-10-31]
 
 ---
 

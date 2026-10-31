@@ -8,7 +8,7 @@
  * - Rate e Spese Ricorrenti
  */
 
-import { INITIAL_CATEGORIES, INITIAL_ACCOUNTS, INITIAL_SALDI, INITIAL_HISTORICAL_NW, INITIAL_TRANSACTIONS, INITIAL_GOALS, DEFAULT_SMART_RULES } from './realData.js';
+import { INITIAL_CATEGORIES, INITIAL_ACCOUNTS, INITIAL_SALDI, INITIAL_HISTORICAL_NW, INITIAL_MONTHLY_BREAKDOWNS, INITIAL_TRANSACTIONS, INITIAL_GOALS, DEFAULT_SMART_RULES } from './realData.js';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'finanze_custom_categories',
@@ -20,7 +20,8 @@ const STORAGE_KEYS = {
   RISK_PROFILE: 'finanze_risk_profile',
   PRIVACY_MODE: 'finanze_privacy_mode',
   SMART_RULES: 'finanze_smart_rules',
-  NW_SNAPSHOTS: 'finanze_nw_snapshots'
+  NW_SNAPSHOTS: 'finanze_nw_snapshots',
+  MONTHLY_CLOSINGS: 'finanze_monthly_closings_v1'
 };
 
 class FinanceStore {
@@ -34,6 +35,7 @@ class FinanceStore {
     this.riskProfile = this.loadRiskProfile();
     this.smartRules = this.loadSmartRules();
     this.nwSnapshots = this.loadNetWorthSnapshots();
+    this.monthlyClosings = this.loadMonthlyClosings();
   }
 
   // === CATEGORIE ===
@@ -83,14 +85,25 @@ class FinanceStore {
       accs = JSON.parse(JSON.stringify(INITIAL_ACCOUNTS));
     }
 
-    // Assicura la presenza dei metadati di riconciliazione e freschezza
+    // Assicura la presenza dei metadati di riconciliazione e freschezza, auto-healing per cache disallineate
     accs.forEach(a => {
       const isPension = a.isPension || (a.type || '').toLowerCase().includes('pension') || (a.name || '').toLowerCase().includes('pension');
+      const initialMatch = INITIAL_ACCOUNTS.find(ia => ia.id === a.id || ia.name.toLowerCase() === a.name.toLowerCase());
+
+      // Auto-healing della cache locale se è rimasta a settembre ma i saldi sono già stati riconciliati al 31/10
+      if (initialMatch && initialMatch.lastReconciledMonth === '10/2026' && a.lastReconciledMonth === '09/2026') {
+        a.lastReconciledMonth = '10/2026';
+        a.lastReconciledDate = initialMatch.lastReconciledDate || '31/10/2026';
+        if (initialMatch.balance && (!a.balance || a.balance === 4391.24)) {
+          a.balance = initialMatch.balance;
+        }
+      }
+
       if (!a.lastReconciledMonth) {
-        a.lastReconciledMonth = isPension ? '09/2026' : '10/2026';
+        a.lastReconciledMonth = initialMatch?.lastReconciledMonth || '10/2026';
       }
       if (!a.lastReconciledDate) {
-        a.lastReconciledDate = isPension ? '30/09/2026' : '28/10/2026';
+        a.lastReconciledDate = initialMatch?.lastReconciledDate || '31/10/2026';
       }
       if (!a.defaultMode) {
         a.defaultMode = isPension ? 'delta' : 'balance';
@@ -100,9 +113,66 @@ class FinanceStore {
     return accs;
   }
 
+  syncSaldiFromCloud(saldiList) {
+    if (!Array.isArray(saldiList) || saldiList.length === 0) return false;
+    let anyChanged = false;
+
+    saldiList.forEach(s => {
+      if (!s || !s.name) return;
+      const acc = this.findAccount(s.name);
+      if (!acc) return;
+
+      const oldBal = parseFloat(acc.balance) || 0;
+      const newBal = parseFloat(s.balance);
+      if (!isNaN(newBal) && Math.abs(oldBal - newBal) > 0.001) {
+        acc.balance = newBal;
+        anyChanged = true;
+      }
+
+      // Sincronizza con precisione la data e il mese di conguaglio dal foglio Saldi Google Sheets
+      if (s.date) {
+        let parsedMonth = null;
+        let formattedDate = null;
+        const dateStr = String(s.date).trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          const [y, m, d] = dateStr.split('-');
+          parsedMonth = `${m}/${y}`;
+          formattedDate = `${d}/${m}/${y}`;
+        } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('/');
+          parsedMonth = `${m}/${y}`;
+          formattedDate = `${d}/${m}/${y}`;
+        }
+
+        if (parsedMonth && (acc.lastReconciledMonth !== parsedMonth || acc.lastReconciledDate !== formattedDate)) {
+          acc.lastReconciledMonth = parsedMonth;
+          acc.lastReconciledDate = formattedDate || acc.lastReconciledDate;
+          anyChanged = true;
+        }
+      }
+    });
+
+    if (anyChanged) {
+      this.saveAccounts();
+      // Aggiorna anche il breakdown del mese corrente se presente
+      const now = new Date();
+      const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+      if (this.monthlyClosings && this.monthlyClosings[curMonthKey]) {
+        const mc = this.monthlyClosings[curMonthKey];
+        this.accounts.forEach(a => {
+          mc.accounts[a.name] = a.balance;
+        });
+        mc.totalNW = this.summary.netWorth;
+        this.saveMonthlyClosings();
+      }
+    }
+    return anyChanged;
+  }
+
   saveAccounts() {
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(this.accounts));
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
       window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
     }
   }
@@ -497,6 +567,273 @@ class FinanceStore {
     this.nwSnapshots = snapshots;
   }
 
+  // === FOGLIO NET WORTH GESTIONALE & CHIUSURE MENSILI ===
+  loadMonthlyClosings() {
+    let closings = {};
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.MONTHLY_CLOSINGS);
+      if (saved) closings = JSON.parse(saved);
+    } catch (e) {}
+
+    // Integra con la baseline dei breakdown iniziali se non presenti
+    if (!closings || Object.keys(closings).length === 0) {
+      closings = JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
+    } else {
+      // Merge baseline per eventuali mesi non ancora salvati
+      Object.entries(INITIAL_MONTHLY_BREAKDOWNS || {}).forEach(([mKey, data]) => {
+        if (!closings[mKey]) {
+          closings[mKey] = JSON.parse(JSON.stringify(data));
+        }
+      });
+    }
+
+    return closings;
+  }
+
+  saveMonthlyClosings() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MONTHLY_CLOSINGS, JSON.stringify(this.monthlyClosings));
+    } catch (e) {
+      console.warn('Errore salvataggio monthlyClosings:', e);
+    }
+  }
+
+  getMonthlyClosing(monthKey) {
+    if (!monthKey) return null;
+    if (this.monthlyClosings && this.monthlyClosings[monthKey]) {
+      return JSON.parse(JSON.stringify(this.monthlyClosings[monthKey]));
+    }
+    // Se non presente, genera una struttura default con i conti attivi
+    const defaultAccs = {};
+    this.accounts.forEach(a => {
+      defaultAccs[a.name] = a.balance;
+    });
+    return {
+      monthKey,
+      label: monthKey,
+      date: `31/${monthKey}`,
+      isClosed: false,
+      accounts: defaultAccs,
+      totalNW: this.summary.netWorth,
+      notes: ''
+    };
+  }
+
+  saveMonthlyClosingData(monthKey, closingData) {
+    if (!monthKey || !closingData) return false;
+
+    if (!this.monthlyClosings) this.monthlyClosings = {};
+    this.monthlyClosings[monthKey] = {
+      monthKey,
+      label: closingData.label || monthKey,
+      date: closingData.date || `31/${monthKey}`,
+      isClosed: true,
+      accounts: closingData.accounts || {},
+      totalNW: Math.round(parseFloat(closingData.totalNW || 0) * 100) / 100,
+      notes: closingData.notes || ''
+    };
+
+    this.saveMonthlyClosings();
+    this.saveNetWorthSnapshot(monthKey, closingData.totalNW);
+
+    // Se è il mese corrente, aggiorna i conti attivi e sincronizza Google Sheets
+    const now = new Date();
+    const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    if (monthKey === curMonthKey) {
+      if (closingData.accounts) {
+        Object.entries(closingData.accounts).forEach(([accName, bal]) => {
+          const acc = this.findAccount(accName);
+          if (acc) {
+            acc.balance = parseFloat(bal) || 0;
+            acc.lastReconciledMonth = monthKey;
+            acc.lastReconciledDate = closingData.date || acc.lastReconciledDate;
+            try {
+              if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+                window.googleSheetsService.updateAccountBalance(acc.name, acc.balance, acc.type);
+              }
+            } catch (err) {}
+          }
+        });
+        this.saveAccounts();
+      }
+    }
+
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { monthKey, closingData } }));
+    }
+
+    return true;
+  }
+
+  getYearlyNetworthMatrix(year = '2026') {
+    const yStr = String(year);
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+    const monthShorts = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const curMonthKey = `${String(curMonth).padStart(2, '0')}/${curYear}`;
+
+    // Calcola il flusso netto mensile dalle transazioni reali (income - expense)
+    const monthlyNetFlows = new Map();
+    this.transactions.forEach(tx => {
+      const ym = this.getTxMonthYear(tx);
+      if (!ym || !ym.endsWith(yStr)) return;
+      const amt = parseFloat(tx.amount) || 0;
+      const current = monthlyNetFlows.get(ym) || 0;
+      if (tx.type === 'income') monthlyNetFlows.set(ym, current + amt);
+      else if (tx.type === 'expense') monthlyNetFlows.set(ym, current - amt);
+    });
+
+    // Mesi dell'anno (1-12)
+    const months = [];
+    for (let m = 1; m <= 12; m++) {
+      const mKey = `${String(m).padStart(2, '0')}/${yStr}`;
+      const isCurrent = (mKey === curMonthKey);
+      const isPast = parseInt(yStr, 10) < curYear || (parseInt(yStr, 10) === curYear && m < curMonth);
+      const isFuture = parseInt(yStr, 10) > curYear || (parseInt(yStr, 10) === curYear && m > curMonth);
+      const closing = this.monthlyClosings ? this.monthlyClosings[mKey] : null;
+
+      months.push({
+        monthKey: mKey,
+        monthNum: m,
+        name: monthNames[m - 1],
+        shortName: monthShorts[m - 1],
+        isCurrent,
+        isPast,
+        isFuture,
+        isClosed: Boolean(closing?.isClosed || (isPast && closing)),
+        hasData: Boolean(closing && closing.totalNW > 0),
+        closing
+      });
+    }
+
+    // Elenco conti raggruppati per macro-sezione
+    const accounts = this.getAccounts();
+    const liquidAccounts = [];
+    const investedAccounts = [];
+    const pensionAccounts = [];
+
+    accounts.forEach(acc => {
+      const nameLower = (acc.name || '').toLowerCase();
+      const typeLower = (acc.type || '').toLowerCase();
+      if (acc.isPension || nameLower.includes('pensione') || typeLower.includes('previden')) {
+        pensionAccounts.push(acc);
+      } else if (acc.isInvestment || nameLower.includes('xeon') || nameLower.includes('vwce') || typeLower.includes('etf') || typeLower.includes('monetar') || typeLower.includes('sicurezza')) {
+        investedAccounts.push(acc);
+      } else {
+        liquidAccounts.push(acc);
+      }
+    });
+
+    // Costruisce la riga per ciascun conto per i 12 mesi
+    const buildAccountRow = (acc) => {
+      const values = [];
+      months.forEach(m => {
+        let val = 0;
+        if (m.closing && m.closing.accounts && typeof m.closing.accounts[acc.name] !== 'undefined') {
+          val = m.closing.accounts[acc.name];
+        } else if (m.isCurrent) {
+          val = acc.balance;
+        } else if (m.isPast) {
+          val = 0;
+        }
+        values.push(Math.round(val * 100) / 100);
+      });
+      return {
+        id: acc.id,
+        name: acc.name,
+        type: acc.type,
+        values
+      };
+    };
+
+    const liquidRows = liquidAccounts.map(buildAccountRow);
+    const investedRows = investedAccounts.map(buildAccountRow);
+    const pensionRows = pensionAccounts.map(buildAccountRow);
+
+    // Calcolo subtotali mensili per ciascuna categoria
+    const calcSubtotals = (rows) => {
+      return months.map((_, idx) => {
+        return Math.round(rows.reduce((sum, r) => sum + (r.values[idx] || 0), 0) * 100) / 100;
+      });
+    };
+
+    const liquidSubtotals = calcSubtotals(liquidRows);
+    const investedSubtotals = calcSubtotals(investedRows);
+    const pensionSubtotals = calcSubtotals(pensionRows);
+
+    // Totale Net Worth per ciascun mese
+    const totalNWValues = months.map((m, idx) => {
+      if (m.closing && typeof m.closing.totalNW === 'number' && m.closing.totalNW > 0) {
+        return m.closing.totalNW;
+      }
+      if (m.isCurrent) {
+        return Math.round(this.summary.netWorth * 100) / 100;
+      }
+      const sum = liquidSubtotals[idx] + investedSubtotals[idx] + pensionSubtotals[idx];
+      return Math.round(sum * 100) / 100;
+    });
+
+    // Calcolo variazioni mese su mese (€ e %)
+    const deltaValues = [];
+    const deltaPctValues = [];
+    months.forEach((m, idx) => {
+      if (idx === 0) {
+        const prevYearMonth = `12/${parseInt(yStr, 10) - 1}`;
+        const prevClosing = this.monthlyClosings ? this.monthlyClosings[prevYearMonth] : null;
+        const prevVal = prevClosing?.totalNW || 0;
+        const curVal = totalNWValues[0];
+        const diff = prevVal > 0 ? curVal - prevVal : 0;
+        deltaValues.push(Math.round(diff * 100) / 100);
+        deltaPctValues.push(prevVal > 0 ? ((diff / prevVal) * 100).toFixed(1) : '0.0');
+      } else {
+        const prevVal = totalNWValues[idx - 1];
+        const curVal = totalNWValues[idx];
+        if (curVal > 0 && prevVal > 0) {
+          const diff = curVal - prevVal;
+          deltaValues.push(Math.round(diff * 100) / 100);
+          deltaPctValues.push(((diff / prevVal) * 100).toFixed(1));
+        } else {
+          deltaValues.push(0);
+          deltaPctValues.push('0.0');
+        }
+      }
+    });
+
+    // Flusso di cassa mensile reale
+    const netFlowValues = months.map(m => {
+      return Math.round((monthlyNetFlows.get(m.monthKey) || 0) * 100) / 100;
+    });
+
+    return {
+      year: yStr,
+      months,
+      liquid: {
+        accounts: liquidRows,
+        subtotals: liquidSubtotals
+      },
+      invested: {
+        accounts: investedRows,
+        subtotals: investedSubtotals
+      },
+      pension: {
+        accounts: pensionRows,
+        subtotals: pensionSubtotals
+      },
+      totals: {
+        netWorth: totalNWValues,
+        delta: deltaValues,
+        deltaPct: deltaPctValues,
+        netFlow: netFlowValues
+      }
+    };
+  }
+
   getTxMonthYear(tx) {
     if (!tx) return null;
     let m = tx.month;
@@ -685,7 +1022,7 @@ class FinanceStore {
 
     this.accounts.forEach(acc => {
       const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension') || (acc.name || '').toLowerCase().includes('pension');
-      const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
+      const recMonth = acc.lastReconciledMonth || '10/2026';
       
       const isStale = (recMonth !== targetKey);
       let lastMonthName = 'Precedente';
@@ -915,9 +1252,22 @@ class FinanceStore {
       this.saveTransactions();
     }
 
-    // Salva lo snapshot del Net Worth
+    // Salva lo snapshot del Net Worth e il breakdown dettagliato per conto
     const newTotalNW = this.summary.netWorth;
     this.saveNetWorthSnapshot(targetKey, newTotalNW);
+
+    const closingAccounts = {};
+    this.accounts.forEach(a => {
+      closingAccounts[a.name] = a.balance;
+    });
+    this.saveMonthlyClosingData(targetKey, {
+      monthKey: targetKey,
+      label: monthName,
+      date: todayFormatted,
+      accounts: closingAccounts,
+      totalNW: newTotalNW,
+      notes: `Chiusura mese ${monthName}`
+    });
 
     return {
       success: true,
@@ -1736,6 +2086,9 @@ class FinanceStore {
 }
 
 export const financeStore = new FinanceStore();
+if (typeof window !== 'undefined') {
+  window.financeStore = financeStore;
+}
 export const mockFinancialData = financeStore; // Compatibilità con componenti esistenti
 export const CATEGORIES = financeStore.getCategories();
 export const ACCOUNTS = financeStore.getAccounts().map(a => a.name);

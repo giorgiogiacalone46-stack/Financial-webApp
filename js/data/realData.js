@@ -118,62 +118,62 @@ export const DEFAULT_SMART_RULES = [
 ];
 
 export const INITIAL_ACCOUNTS = [
-  { id: 'buddybank', name: 'Buddybank', type: 'Liquidità corrente', balance: 4160.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
-  { id: 'xeon', name: 'Trade Republic - XEON', type: 'Fondo Emergenza / Sicurezza', balance: 5383.32, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
-  { id: 'vwce', name: 'Trade Republic - VWCE', type: 'Azionario Globale (Lungo Termine)', balance: 3410.25, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
-  { id: 'pensione', name: 'Fondo Pensione', type: 'Previdenza complementare', balance: 4391.24, isPension: true, lastReconciledMonth: '09/2026', lastReconciledDate: '30/09/2026', defaultMode: 'delta' },
-  { id: 'contanti', name: 'Contanti', type: 'Liquidità contante', balance: 10.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' },
-  { id: 'buoni_pasto', name: 'Buoni Pasto', type: 'Buoni Pasto / Benefit', balance: 388.50, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '28/10/2026', defaultMode: 'balance' }
+  { id: 'buddybank', name: 'Buddybank', type: 'Liquidità corrente', balance: 2393.39, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '31/10/2026', defaultMode: 'balance' },
+  { id: 'xeon', name: 'Trade Republic - XEON', type: 'Fondo Emergenza / Sicurezza', balance: 6878.32, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '31/10/2026', defaultMode: 'balance' },
+  { id: 'vwce', name: 'Trade Republic - VWCE', type: 'Azionario Globale (Lungo Termine)', balance: 3610.25, isInvestment: true, lastReconciledMonth: '10/2026', lastReconciledDate: '31/10/2026', defaultMode: 'balance' },
+  { id: 'pensione', name: 'Fondo Pensione', type: 'Previdenza complementare', balance: 4697.77, isPension: true, lastReconciledMonth: '10/2026', lastReconciledDate: '31/10/2026', defaultMode: 'delta' },
+  { id: 'contanti', name: 'Contanti', type: 'Liquidità contante', balance: 10.00, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '31/10/2026', defaultMode: 'balance' },
+  { id: 'buoni_pasto', name: 'Buoni Pasto', type: 'Buoni Pasto / Benefit', balance: 409.50, isLiquid: true, lastReconciledMonth: '10/2026', lastReconciledDate: '31/10/2026', defaultMode: 'balance' }
 ];
 
 export const INITIAL_SALDI = [
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "Buddybank",
     "type": "Liquidità corrente",
-    "balance": 4160.0,
-    "notes": "Conto base operativo (include stipendio ottobre)"
+    "balance": 2393.39,
+    "notes": "Saldo reale verificato fine ottobre"
   },
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "Trade Republic - XEON",
     "type": "Fondo Emergenza / Sicurezza",
-    "balance": 5383.32,
-    "notes": "Overnight monetario (target reintegro: +1.500 €)"
+    "balance": 6878.32,
+    "notes": "Overnight monetario verificato"
   },
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "Trade Republic - VWCE",
     "type": "Azionario Globale (Lungo Termine)",
-    "balance": 3410.25,
-    "notes": "PAC ETF (in arrivo versamento 200 € a nov)"
+    "balance": 3610.25,
+    "notes": "PAC ETF verificato"
   },
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "Contanti",
     "type": "Liquidità contante",
     "balance": 10.0,
-    "notes": "Disponibilità fisica"
+    "notes": "Disponibilità fisica verificata"
   },
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "Fondo Pensione",
     "type": "Previdenza complementare",
-    "balance": 4391.24,
-    "notes": "Valore congelato/standby (snapshot settembre 2026)"
+    "balance": 4697.77,
+    "notes": "Aggiornato con quota cedolino ottobre (+306,53 €)"
   },
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "TOTALE NET WORTH",
     "type": "Patrimonio Complessivo",
-    "balance": 17354.81,
-    "notes": "Inclusa previdenza complementare"
+    "balance": 17589.73,
+    "notes": "Patrimonio totale al 31/10/2026"
   },
   {
-    "date": "28/10/2026",
+    "date": "31/10/2026",
     "name": "TOTALE LIQUIDO & INVESTITO",
     "type": "Disponibilità Diretta",
-    "balance": 12963.57,
+    "balance": 12891.96,
     "notes": "Esclusa previdenza complementare"
   }
 ];
@@ -309,8 +309,175 @@ export const INITIAL_HISTORICAL_NW = [
   {
     "month": "09/2026",
     "value": 16951.37
+  },
+  {
+    "month": "10/2026",
+    "value": 17589.73
   }
 ];
+
+export const INITIAL_MONTHLY_BREAKDOWNS = {
+  '01/2026': {
+    monthKey: '01/2026',
+    label: 'Gennaio 2026',
+    date: '31/01/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 1500.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 1500.00,
+      'Trade Republic - VWCE': 1400.00,
+      'Fondo Pensione': 3071.95,
+      'Buoni Pasto': 150.00
+    },
+    totalNW: 7481.95,
+    notes: 'Chiusura fine mese gennaio 2026'
+  },
+  '02/2026': {
+    monthKey: '02/2026',
+    label: 'Febbraio 2026',
+    date: '28/02/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 2100.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 2000.00,
+      'Trade Republic - VWCE': 1650.00,
+      'Fondo Pensione': 3199.33,
+      'Buoni Pasto': 180.00
+    },
+    totalNW: 8959.33,
+    notes: 'Chiusura fine mese febbraio 2026'
+  },
+  '03/2026': {
+    monthKey: '03/2026',
+    label: 'Marzo 2026',
+    date: '31/03/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 3200.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 2800.00,
+      'Trade Republic - VWCE': 1800.00,
+      'Fondo Pensione': 3342.22,
+      'Buoni Pasto': 210.00
+    },
+    totalNW: 11152.22,
+    notes: 'Chiusura fine mese marzo 2026'
+  },
+  '04/2026': {
+    monthKey: '04/2026',
+    label: 'Aprile 2026',
+    date: '30/04/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 3100.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 3400.00,
+      'Trade Republic - VWCE': 2100.00,
+      'Fondo Pensione': 3479.65,
+      'Buoni Pasto': 240.00
+    },
+    totalNW: 12089.65,
+    notes: 'Chiusura fine mese aprile 2026'
+  },
+  '05/2026': {
+    monthKey: '05/2026',
+    label: 'Maggio 2026',
+    date: '31/05/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 3400.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 4200.00,
+      'Trade Republic - VWCE': 2350.00,
+      'Fondo Pensione': 3605.44,
+      'Buoni Pasto': 270.00
+    },
+    totalNW: 13565.44,
+    notes: 'Chiusura fine mese maggio 2026'
+  },
+  '06/2026': {
+    monthKey: '06/2026',
+    label: 'Giugno 2026',
+    date: '30/06/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 3900.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 5000.00,
+      'Trade Republic - VWCE': 2550.00,
+      'Fondo Pensione': 3749.65,
+      'Buoni Pasto': 300.00
+    },
+    totalNW: 15209.65,
+    notes: 'Chiusura fine mese giugno 2026'
+  },
+  '07/2026': {
+    monthKey: '07/2026',
+    label: 'Luglio 2026',
+    date: '31/07/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 3800.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 5500.00,
+      'Trade Republic - VWCE': 2900.00,
+      'Fondo Pensione': 3868.69,
+      'Buoni Pasto': 330.00
+    },
+    totalNW: 16078.69,
+    notes: 'Chiusura fine mese luglio 2026'
+  },
+  '08/2026': {
+    monthKey: '08/2026',
+    label: 'Agosto 2026',
+    date: '31/08/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 3200.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 5300.00,
+      'Trade Republic - VWCE': 3100.00,
+      'Fondo Pensione': 4364.21,
+      'Buoni Pasto': 360.00
+    },
+    totalNW: 15974.21,
+    notes: 'Chiusura fine mese agosto 2026'
+  },
+  '09/2026': {
+    monthKey: '09/2026',
+    label: 'Settembre 2026',
+    date: '30/09/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 4160.00,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 5383.32,
+      'Trade Republic - VWCE': 3410.25,
+      'Fondo Pensione': 3987.80,
+      'Buoni Pasto': 388.50
+    },
+    totalNW: 16951.37,
+    notes: 'Chiusura fine mese settembre 2026'
+  },
+  '10/2026': {
+    monthKey: '10/2026',
+    label: 'Ottobre 2026',
+    date: '31/10/2026',
+    isClosed: true,
+    accounts: {
+      'Buddybank': 2393.39,
+      'Contanti': 10.00,
+      'Trade Republic - XEON': 6878.32,
+      'Trade Republic - VWCE': 3610.25,
+      'Fondo Pensione': 4697.77,
+      'Buoni Pasto': 409.50
+    },
+    totalNW: 17589.73,
+    notes: 'Chiusura fine mese ottobre 2026 verificata'
+  }
+};
 export const INITIAL_TRANSACTIONS = [
   {
     "id": "tx_1",
@@ -10153,131 +10320,211 @@ export const INITIAL_TRANSACTIONS = [
     "description": "giulia"
   },
   {
-    "id": "tx_616",
-    "rowNumber": 617,
-    "year": "2026",
-    "week": "39",
-    "month": "9",
-    "date": "25/09/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 33.67,
-    "category": "❔Altro",
-    "description": "scopa elettrica rata 1"
+      "id": "tx_616",
+      "rowNumber": 617,
+      "year": "2026",
+      "week": "39",
+      "month": "9",
+      "date": "25/09/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 33.67,
+      "category": "❔Altro",
+      "description": "scopa elettrica rata 1"
   },
   {
-    "id": "tx_617",
-    "rowNumber": 618,
-    "year": "2026",
-    "week": "39",
-    "month": "9",
-    "date": "26/09/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 44.67,
-    "category": "❔Altro",
-    "description": "regalo serena rata 1"
+      "id": "tx_617",
+      "rowNumber": 618,
+      "year": "2026",
+      "week": "39",
+      "month": "9",
+      "date": "26/09/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 44.67,
+      "category": "❔Altro",
+      "description": "regalo serena rata 1"
   },
   {
-    "id": "tx_618",
-    "rowNumber": 619,
-    "year": "2026",
-    "week": "44",
-    "month": "10",
-    "date": "26/10/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 33.67,
-    "category": "❔Altro",
-    "description": "scopa elettrica rata 2"
+      "id": "tx_618",
+      "rowNumber": 619,
+      "year": "2026",
+      "week": "43",
+      "month": "10",
+      "date": "25/10/2026",
+      "type": "income",
+      "rawType": "Entrata",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 1900.0,
+      "category": "💰Stipendio",
+      "description": "stipendio ottobre"
   },
   {
-    "id": "tx_619",
-    "rowNumber": 620,
-    "year": "2026",
-    "week": "44",
-    "month": "10",
-    "date": "26/10/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 44.67,
-    "category": "❔Altro",
-    "description": "regalo serena rata 2"
+      "id": "tx_619",
+      "rowNumber": 620,
+      "year": "2026",
+      "week": "43",
+      "month": "10",
+      "date": "25/10/2026",
+      "type": "income",
+      "rawType": "Entrata",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 784.0,
+      "category": "🏡 Casa",
+      "description": "reintegro caparra casa quarto d'altino"
   },
   {
-    "id": "tx_620",
-    "rowNumber": 621,
-    "year": "2026",
-    "week": "44",
-    "month": "10",
-    "date": "31/10/2026",
-    "type": "transfer",
-    "rawType": "Trasferimento",
-    "fromAccount": "Buddybank",
-    "toAccount": "Trade Republic - VWCE",
-    "account": "Buddybank",
-    "amount": 200.0,
-    "category": "🛅 Livello Crescita",
-    "description": "Giroconto PAC VWCE"
+      "id": "tx_620",
+      "rowNumber": 621,
+      "year": "2026",
+      "week": "43",
+      "month": "10",
+      "date": "25/10/2026",
+      "type": "income",
+      "rawType": "Entrata",
+      "fromAccount": "Buoni Pasto",
+      "toAccount": "",
+      "account": "Buoni Pasto",
+      "amount": 231.0,
+      "category": "💶 Altre entrate",
+      "description": "accredito 22 buoni pasto"
   },
   {
-    "id": "tx_621",
-    "rowNumber": 622,
-    "year": "2026",
-    "week": "44",
-    "month": "10",
-    "date": "31/10/2026",
-    "type": "transfer",
-    "rawType": "Trasferimento",
-    "fromAccount": "Buddybank",
-    "toAccount": "Trade Republic - XEON",
-    "account": "Buddybank",
-    "amount": 1495.0,
-    "category": "🏦 Fondo di emergenza",
-    "description": "Giroconto reintegro Fondo Emergenza XEON"
+      "id": "tx_621",
+      "rowNumber": 622,
+      "year": "2026",
+      "week": "44",
+      "month": "10",
+      "date": "26/10/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 33.67,
+      "category": "❔Altro",
+      "description": "scopa elettrica rata 2"
   },
   {
-    "id": "tx_622",
-    "rowNumber": 623,
-    "year": "2026",
-    "week": "48",
-    "month": "11",
-    "date": "25/11/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 33.67,
-    "category": "❔Altro",
-    "description": "scopa elettrica rata 3"
+      "id": "tx_622",
+      "rowNumber": 623,
+      "year": "2026",
+      "week": "44",
+      "month": "10",
+      "date": "26/10/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 44.67,
+      "category": "❔Altro",
+      "description": "regalo serena rata 2"
   },
   {
-    "id": "tx_623",
-    "rowNumber": 624,
-    "year": "2026",
-    "week": "48",
-    "month": "11",
-    "date": "26/11/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 44.67,
-    "category": "❔Altro",
-    "description": "regalo serena rata 3"
+      "id": "tx_623",
+      "rowNumber": 624,
+      "year": "2026",
+      "week": "44",
+      "month": "10",
+      "date": "31/10/2026",
+      "type": "transfer",
+      "rawType": "Trasferimento",
+      "fromAccount": "Buddybank",
+      "toAccount": "Trade Republic - VWCE",
+      "account": "Buddybank",
+      "amount": 200.0,
+      "category": "🛅 Livello Crescita",
+      "description": "Giroconto PAC VWCE"
+  },
+  {
+      "id": "tx_624",
+      "rowNumber": 625,
+      "year": "2026",
+      "week": "44",
+      "month": "10",
+      "date": "31/10/2026",
+      "type": "transfer",
+      "rawType": "Trasferimento",
+      "fromAccount": "Buddybank",
+      "toAccount": "Trade Republic - XEON",
+      "account": "Buddybank",
+      "amount": 1495.0,
+      "category": "🏦 Fondo di emergenza",
+      "description": "Giroconto reintegro Fondo Emergenza XEON"
+  },
+  {
+      "id": "tx_625",
+      "rowNumber": 626,
+      "year": "2026",
+      "week": "44",
+      "month": "10",
+      "date": "31/10/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buoni Pasto",
+      "toAccount": "",
+      "account": "Buoni Pasto",
+      "amount": 231.0,
+      "category": "🛒 Alimentari",
+      "description": "spesa alimentare buoni pasto ottobre"
+  },
+  {
+      "id": "tx_626",
+      "rowNumber": 627,
+      "year": "2026",
+      "week": "44",
+      "month": "10",
+      "date": "31/10/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 1166.0,
+      "category": "⚖️ Conguaglio / Rettifica",
+      "description": "Conguaglio quadratura spese ottobre"
+  },
+  {
+      "id": "tx_627",
+      "rowNumber": 628,
+      "year": "2026",
+      "week": "48",
+      "month": "11",
+      "date": "25/11/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 33.67,
+      "category": "❔Altro",
+      "description": "scopa elettrica rata 3"
+  },
+  {
+      "id": "tx_628",
+      "rowNumber": 629,
+      "year": "2026",
+      "week": "48",
+      "month": "11",
+      "date": "26/11/2026",
+      "type": "expense",
+      "rawType": "Uscita",
+      "fromAccount": "Buddybank",
+      "toAccount": "",
+      "account": "Buddybank",
+      "amount": 44.67,
+      "category": "❔Altro",
+      "description": "regalo serena rata 3"
   }
 ];

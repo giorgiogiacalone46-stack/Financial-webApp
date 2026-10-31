@@ -167,12 +167,12 @@ class AppController {
     // Auto-sync al boot se configurato
     if (googleSheetsService.isConfigured() && googleSheetsService.autoSync) {
       googleSheetsService.fetchAllData().then(data => {
-        if (data && data.transactions && data.transactions.length > 0) {
-          financeStore.setTransactions(data.transactions);
-          if (data.saldi) {
-            data.saldi.forEach(s => {
-              financeStore.updateAccountBalance(s.name, s.balance);
-            });
+        if (data) {
+          if (data.transactions && data.transactions.length > 0) {
+            financeStore.setTransactions(data.transactions);
+          }
+          if (data.saldi && data.saldi.length > 0) {
+            financeStore.syncSaldiFromCloud(data.saldi);
           }
           const container = document.getElementById('main-viewport');
           if (this.currentTab === 'dashboard') this.dashboardView.render(container);
