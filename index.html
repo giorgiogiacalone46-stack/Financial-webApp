@@ -16,7 +16,7 @@
   <link rel="manifest" href="manifest.json">
   
   <!-- Apple Design System Styles -->
-  <link rel="stylesheet" href="css/apple-design.css?v=2026.15">
+  <link rel="stylesheet" href="css/apple-design.css?v=2026.18">
 </head>
 <body>
 
@@ -170,10 +170,10 @@
       <!-- Google Sheets Connection Status -->
       <div class="sidebar-footer">
         <div class="sheet-status-card">
-          <div class="sheet-status-indicator" title="Beta Sandbox Protetto"></div>
+          <div class="sheet-status-indicator" title="Stato Connessione"></div>
           <div class="sheet-status-info">
-            <span class="sheet-status-name">Finanze (Beta Sandbox)</span>
-            <span class="sheet-status-desc">🛡️ Database Protetto</span>
+            <span class="sheet-status-name">Finanze - Movimenti</span>
+            <span class="sheet-status-desc">Dati Sincronizzati</span>
           </div>
         </div>
       </div>
@@ -206,9 +206,9 @@
               <line x1="1" y1="1" x2="23" y2="23"></line>
             </svg>
           </button>
-          <div class="mobile-sheet-pill" title="Beta Sandbox Protetto">
+          <div class="mobile-sheet-pill" title="Stato Database">
             <span class="dot"></span>
-            <span>🛡️ Sandbox</span>
+            <span>Finanze</span>
           </div>
         </div>
       </header>
@@ -326,11 +326,11 @@
   <script src="js/vendor/chart.umd.min.js"></script>
 
   <!-- Application Controller Script (ES Module + Fallback per apertura diretta file://) -->
-  <script type="module" src="js/app.js?v=2026.15"></script>
+  <script type="module" src="js/app.js?v=2026.18"></script>
   <script>
     if (window.location.protocol === 'file:') {
       var fallbackScript = document.createElement('script');
-      fallbackScript.src = 'js/app.bundle.js?v=2026.15';
+      fallbackScript.src = 'js/app.bundle.js?v=2026.18';
       document.body.appendChild(fallbackScript);
     }
   </script>

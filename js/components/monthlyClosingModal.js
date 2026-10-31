@@ -174,6 +174,7 @@ export class MonthlyClosingModal {
 
   renderAccountRow(acc, status) {
     const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension');
+    const isInvestment = acc.isInvestment || acc.id === 'xeon' || acc.id === 'vwce' || (acc.name || '').toLowerCase().includes('xeon') || (acc.name || '').toLowerCase().includes('vwce');
     const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
     const isStale = (recMonth !== this.targetMonth);
     const defaultMode = acc.defaultMode || (isPension ? 'delta' : 'balance');
@@ -258,10 +259,10 @@ export class MonthlyClosingModal {
         <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary);">
           <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="check-tx-${acc.name}" data-account="${acc.name}" checked style="accent-color: var(--apple-blue);" />
-            <span>Crea movimento di conguaglio/versamento nel registro</span>
+            <span>${isInvestment ? 'Registra come giroconto da Buddybank' : (isPension ? 'Crea versamento nel registro' : 'Crea movimento di conguaglio')}</span>
           </label>
           <span style="font-size: 11px; color: var(--text-tertiary);">
-            ${isPension ? 'Cat: 🛅 Livello Crescita' : 'Cat: ⚖️ Conguaglio'}
+            ${isInvestment ? (acc.id === 'vwce' || (acc.name || '').toLowerCase().includes('vwce') ? 'Giroconto: 🛅 Livello Crescita' : 'Giroconto: 🏦 Fondo emergenza') : (isPension ? 'Cat: 🛅 Livello Crescita' : 'Cat: ⚖️ Conguaglio')}
           </span>
         </div>
 

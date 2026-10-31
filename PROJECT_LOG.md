@@ -25,7 +25,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.15 — Official Production Release)
+## 📊 Stato Attuale dei Moduli (v2026.18 — Official Production Release)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -48,7 +48,27 @@ Ogni nuova idea segue questo ciclo di vita:
 
 ### 📌 Voci di Registro
 
-- **[TEST LOCALE] Studio Chiusura Fine Mese & Riconciliazione Saldi Intelligente (v2026.17-beta)**:
+- **[MERGE MAIN] Risoluzione Flusso Giroconto & Riconciliazione Atomica Saldi (Release v2026.18)**:
+  - **Problema Rilevato da Giorgio**:
+    - Nell'eseguire un giroconto (sia dalla modale manuale *"Nuovo Movimento"*, sia dal flusso automatico di *"Chiusura Mese / PAC / Reintegro"*), i saldi del conto di origine e del conto di arrivo non variavano come atteso (il primo doveva diminuire e il secondo aumentare).
+  - **Diagnosi delle Cause Radice**:
+    1. *Collisione Default Conto Origine e Destinazione*: nella modale di inserimento, entrambi i menu a tendina (`form-account` e `form-to-account`) puntavano per impostazione predefinita al primo conto della lista (`Buddybank`). In assenza di selezione esplicita o per errore di distrazione, il prelievo e l'accredito avvenivano sullo stesso conto, annullandosi vicendevolmente (`balance - importo + importo = invariato`).
+    2. *Mancato Decremento Conto Origine in Chiusura Mese*: nella funzione `executeMonthlyClosing`, la registrazione del giroconto (es. PAC su VWCE o reintegro XEON con spunta *"Registra come giroconto da Buddybank"*) aggiornava il saldo del conto di arrivo ma ometteva di scalare la quota dal conto di origine (`Buddybank`).
+    3. *Mancata Sincronizzazione Foglio "Saldi" e Riconoscimento "Giroconto" in Google Apps Script*: `Code.gs` non riconosceva `"giroconto"` in `normalizeType` (riconoscendo solo `"trasferimento"` o `"transfer"` e classificandolo altrimenti come spesa `"expense"`), e non aggiornava la scheda `Saldi` al momento dell'aggiunta transazione; ad ogni fetch/sync successivo, i vecchi saldi non aggiornati di Google Sheets sovrascrivevano la memoria locale.
+  - **Implementazione della Soluzione**:
+    1. *Validazione Anti-Collisione & Selezione Intelligente (`movimentiView.js`)*:
+       - Alla selezione del tipo *"Giroconto"*, il conto di destinazione viene preimpostato in automatico su un conto diverso da quello di origine.
+       - Impedita categoricamente la conferma se conto di partenza e arrivo coincidono (feedback shake + blocco).
+       - Integrata la card nativa Apple **"Impatto Saldi in Tempo Reale"**: mostra in anteprima reattiva la variazione esatta di entrambi i conti (`📤 Origine: € X ➔ € X-amt`, `📥 Destinazione: € Y ➔ € Y+amt`, `Net Worth: Invariato`).
+    2. *Decremento Atomico Origine in Chiusura Mese (`mockData.js`)*:
+       - Estesa `executeMonthlyClosing`: quando viene spuntato il giroconto di reintegro o PAC, scala istantaneamente l'importo dal conto sorgente (`Buddybank`), tracciandolo in `modifiedAccounts` e aggiornando il foglio `Saldi`.
+    3. *Risoluzione Robusta Account & Google Apps Script (`Code.gs` & `mockData.js`)*:
+       - Aggiunto `findAccount(idOrName)` con matching esatto e fuzzy (gestione alias come `"Trade Republic"` vs `"Trade Republic - XEON"`).
+       - Esteso `Code.gs` per riconoscere la tipologia `"Giroconto"` e sincronizzare contestualmente la scheda `Saldi`.
+       - Evento globale `finanze:accounts-updated` per aggiornamento live immediato di tutte le card della Dashboard, Impostazioni e Investimenti.
+    4. *Bundle & Collaudo*: ricompilato `js/app.bundle.js` e validato con Apple JavaScriptCore (JSC) con esito positivo su tutti e 4 i test di suite. [2026-10-31]
+
+- **[MERGE MAIN] Studio Chiusura Fine Mese & Riconciliazione Saldi Intelligente (Release v2026.17)**:
   - **Requisito & Analisi del Flusso Gestionale di Giorgio**:
     - Nel workflow originario su Google Sheets (fogli 2024, 2025, 2026), Giorgio effettua la riconciliazione di fine mese distinguendo due casistiche operative radicalmente differenti:
       1. *Saldo Effettivo Totale*: per conti correnti e liquidità (es. Buddybank) o fondi monetari/ETF (XEON, VWCE), in cui inserisce direttamente l'ammontare letto sull'app bancaria/broker.

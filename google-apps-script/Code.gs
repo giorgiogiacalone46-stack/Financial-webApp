@@ -133,7 +133,7 @@ function handleRequest(e, method) {
 
       var tipoDisplay = "Uscita";
       if (tx.type === "income" || tx.type === "Entrata") tipoDisplay = "Entrata";
-      else if (tx.type === "transfer" || tx.type === "Trasferimento") tipoDisplay = "Trasferimento";
+      else if (tx.type === "transfer" || tx.type === "Trasferimento" || tx.type === "Giroconto" || tx.type === "giroconto") tipoDisplay = "Trasferimento";
 
       movSheet.appendRow([
         y,
@@ -148,11 +148,88 @@ function handleRequest(e, method) {
         tx.description || ""
       ]);
 
+      // Allineamento automatico Saldi per mantenere coerenza istantanea con i movimenti
+      try {
+        var saldiSheet = ss.getSheetByName("Saldi");
+        if (saldiSheet) {
+          var sRows = saldiSheet.getDataRange().getValues();
+          var updateSaldo = function(accName, deltaAmt) {
+            if (!accName) return;
+            var lower = String(accName).toLowerCase().trim();
+            for (var k = 1; k < sRows.length; k++) {
+              var rowAcc = String(sRows[k][1] || "").toLowerCase().trim();
+              if (rowAcc === lower || rowAcc.indexOf(lower) !== -1 || lower.indexOf(rowAcc) !== -1) {
+                var curr = parseCurrency(sRows[k][3]);
+                var newB = Math.round((curr + deltaAmt) * 100) / 100;
+                saldiSheet.getRange(k + 1, 4).setValue("€" + newB.toFixed(2).replace(".", ","));
+                saldiSheet.getRange(k + 1, 1).setValue(formattedDate);
+                break;
+              }
+            }
+          };
+
+          var txAmt = parseFloat(tx.amount || 0);
+          if (tipoDisplay === "Trasferimento") {
+            updateSaldo(tx.account || tx.fromAccount, -txAmt);
+            if (tx.toAccount) updateSaldo(tx.toAccount, txAmt);
+          } else if (tipoDisplay === "Entrata") {
+            updateSaldo(tx.account || tx.fromAccount, txAmt);
+          } else if (tipoDisplay === "Uscita") {
+            updateSaldo(tx.account || tx.fromAccount, -txAmt);
+          }
+        }
+      } catch (saldiErr) {
+        // Non bloccare la scrittura del movimento se il foglio Saldi ha un formato custom
+      }
+
       return createJsonResponse({
         status: "success",
         message: "Movimento aggiunto con successo al foglio!",
         rowNumber: movSheet.getLastRow()
       });
+    }
+
+    // 2.b MODIFICA MOVIMENTO ESISTENTE
+    if (action === "updateTransaction") {
+      var movSheet = ss.getSheetByName("Movimenti");
+      var rowNum = parseInt(params.rowNumber || postData.rowNumber || 0, 10);
+      var tx = postData.transaction || postData;
+
+      if (movSheet && rowNum > 1 && rowNum <= movSheet.getLastRow()) {
+        var dateObj = tx.date ? new Date(tx.date) : new Date();
+        var d = dateObj.getDate();
+        var m = dateObj.getMonth() + 1;
+        var y = dateObj.getFullYear();
+        var formattedDate = (d < 10 ? "0" + d : d) + "/" + (m < 10 ? "0" + m : m) + "/" + y;
+
+        var weekNum = getWeekNumber(dateObj);
+        var formattedAmount = "€" + parseFloat(tx.amount || 0).toFixed(2).replace(".", ",");
+
+        var tipoDisplay = "Uscita";
+        if (tx.type === "income" || tx.type === "Entrata") tipoDisplay = "Entrata";
+        else if (tx.type === "transfer" || tx.type === "Trasferimento" || tx.type === "Giroconto" || tx.type === "giroconto") tipoDisplay = "Trasferimento";
+
+        // Colonne: Anno, Settimana, Mese, Data, Tipo, Conto origine, Conto destinazione, Importo, Categoria, Note
+        movSheet.getRange(rowNum, 1, 1, 10).setValues([[
+          y,
+          weekNum,
+          m,
+          formattedDate,
+          tipoDisplay,
+          tx.account || tx.fromAccount || "Buddybank",
+          tx.toAccount || "",
+          formattedAmount,
+          tx.category || "❔Altro",
+          tx.description || ""
+        ]]);
+
+        return createJsonResponse({
+          status: "success",
+          message: "Movimento aggiornato con successo!",
+          rowNumber: rowNum
+        });
+      }
+      return createJsonResponse({ status: "error", message: "Numero riga non valido per aggiornamento." }, 400);
     }
 
     // 3. ELIMINAZIONE MOVIMENTO
@@ -235,7 +312,7 @@ function parseDateString(val) {
 function normalizeType(val) {
   var s = String(val || "").toLowerCase();
   if (s.indexOf("entrata") !== -1 || s.indexOf("income") !== -1) return "income";
-  if (s.indexOf("trasferimento") !== -1 || s.indexOf("transfer") !== -1) return "transfer";
+  if (s.indexOf("trasferimento") !== -1 || s.indexOf("transfer") !== -1 || s.indexOf("girocont") !== -1) return "transfer";
   return "expense";
 }
 

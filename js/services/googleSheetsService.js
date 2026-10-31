@@ -18,22 +18,14 @@ export class GoogleSheetsService {
     this.securityToken = localStorage.getItem(SHEETS_STORAGE_KEYS.SECURITY_TOKEN) || '';
     this.autoSync = localStorage.getItem(SHEETS_STORAGE_KEYS.AUTO_SYNC) !== 'false';
 
-    // Rilevamento automatico dell'ambiente:
-    // 1. Host GitHub Pages (*.github.io): è la produzione cloud ufficiale (main) -> Sandbox disattivata di default.
-    // 2. Altrimenti legge il branch corrente (APP_ENV.isBeta):
-    //    - Su branch 'beta': Sandbox ATTIVA di default per blindare il database reale durante test e R&D.
-    //    - Su branch 'main': Sandbox DISATTIVATA di default per sincronizzare direttamente su Google Sheets.
-    const isProductionHost = typeof window !== 'undefined' && Boolean(window.location && typeof window.location.hostname === 'string' && window.location.hostname.includes('github.io'));
-    const isBetaEnvironment = !isProductionHost && (typeof APP_ENV !== 'undefined' ? APP_ENV.isBeta : false);
-
-    this.isBeta = isBetaEnvironment;
-
-    // Preferenza utente salvata in localStorage (ha precedenza se impostata esplicitamente tramite switch nelle Impostazioni)
+    // Sincronizzazione Reale: Se l'utente configura la Web App di Google Apps Script,
+    // la sincronizzazione cloud deve essere SEMPRE attiva e prioritaria sia da PC che da Smartphone.
+    // La Sandbox è disattivata di default in modo che nessuna modifica vada persa in locale.
     const storedSandbox = localStorage.getItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE);
     if (storedSandbox !== null) {
       this.sandboxMode = storedSandbox === 'true';
     } else {
-      this.sandboxMode = isBetaEnvironment;
+      this.sandboxMode = false; // Sempre falso di default: sincronizzazione live reale attiva!
     }
 
     this.isOnline = navigator.onLine;
@@ -191,6 +183,47 @@ export class GoogleSheetsService {
       throw new Error(res.message);
     } catch (err) {
       console.error('Errore scrittura su Google Sheets:', err);
+      this.syncStatus = 'error';
+      this.updateStatusBadge();
+      return { success: false, error: err.message };
+    }
+  }
+
+  async updateTransaction(rowNumber, transaction) {
+    if (this.sandboxMode) {
+      console.log('🛡️ [Sandbox] Aggiornamento remoto bloccato.');
+      return { success: true, localOnly: true, sandbox: true };
+    }
+
+    if (!this.isConfigured() || !rowNumber) return { success: true, localOnly: true };
+
+    try {
+      this.syncStatus = 'syncing';
+      this.updateStatusBadge();
+
+      const payload = {
+        action: 'updateTransaction',
+        token: this.securityToken,
+        rowNumber: rowNumber,
+        transaction: transaction
+      };
+
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      const res = await response.json();
+      if (res.status === 'success') {
+        this.syncStatus = 'connected';
+        localStorage.setItem(SHEETS_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+        this.updateStatusBadge();
+        return { success: true };
+      }
+      throw new Error(res.message);
+    } catch (err) {
+      console.error('Errore modifica su Google Sheets:', err);
       this.syncStatus = 'error';
       this.updateStatusBadge();
       return { success: false, error: err.message };

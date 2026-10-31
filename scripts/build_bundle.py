@@ -17,6 +17,7 @@ FILES = [
     'js/services/smartCategorizer.js',
     'js/services/googleSheetsService.js',
     'js/services/financialAssistantService.js',
+    'js/components/monthlyClosingModal.js',
     'js/components/dashboardView.js',
     'js/components/speseView.js',
     'js/components/movimentiView.js',

@@ -272,6 +272,10 @@ export class ImpostazioniView {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                 <span>Verifica Connessione</span>
               </button>
+              <button class="apple-btn-secondary" id="btn-force-sync-now" style="color: var(--apple-blue); border-color: rgba(0, 113, 227, 0.3);">
+                ${getIcon('sync', 14)}
+                <span>Sincronizza Ora dal Foglio</span>
+              </button>
               <button class="apple-btn-primary" id="btn-save-sheets-config">
                 <span>Salva Impostazioni</span>
               </button>
@@ -657,6 +661,45 @@ export class ImpostazioniView {
         const res = await googleSheetsService.testConnection();
         feedbackEl.className = `connection-feedback ${res.success ? 'success' : 'error'}`;
         feedbackEl.textContent = res.message;
+      });
+    }
+
+    const btnForceSync = document.getElementById('btn-force-sync-now');
+    if (btnForceSync) {
+      btnForceSync.addEventListener('click', async () => {
+        const feedbackEl = document.getElementById('connection-test-feedback');
+        if (feedbackEl) {
+          feedbackEl.style.display = 'block';
+          feedbackEl.className = 'connection-feedback loading';
+          feedbackEl.textContent = 'Scaricamento e allineamento dati da Google Sheets in corso...';
+        }
+
+        try {
+          const data = await googleSheetsService.fetchAllData();
+          if (data && data.transactions) {
+            financeStore.setTransactions(data.transactions);
+            if (data.saldi) {
+              data.saldi.forEach(s => {
+                financeStore.updateAccountBalance(s.name, s.balance);
+              });
+            }
+            if (feedbackEl) {
+              feedbackEl.className = 'connection-feedback success';
+              feedbackEl.textContent = `Sincronizzazione completata con successo! ${data.transactions.length} movimenti e saldi allineati.`;
+            }
+            setTimeout(() => this.render(container), 800);
+          } else {
+            if (feedbackEl) {
+              feedbackEl.className = 'connection-feedback error';
+              feedbackEl.textContent = 'Nessun dato ricevuto da Google Sheets o configurazione non valida.';
+            }
+          }
+        } catch (err) {
+          if (feedbackEl) {
+            feedbackEl.className = 'connection-feedback error';
+            feedbackEl.textContent = 'Errore durante la sincronizzazione: ' + (err.message || err);
+          }
+        }
       });
     }
   }

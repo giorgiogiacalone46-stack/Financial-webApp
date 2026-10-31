@@ -1,17 +1,17 @@
 /**
  * Configurazione Ambiente Applicazione
- * Branch: beta (Laboratorio R&D / Sviluppo Attivo)
+ * Branch: main (Produzione / Stabile)
  * 
  * Regola Costituzionale:
- * - In beta: Sandbox attiva di default per proteggere il database reale da qualsiasi scrittura.
  * - In main (produzione): Sincronizzazione reale attiva di default con Google Sheets.
+ * - In beta: Sandbox attiva di default per proteggere il database reale da qualsiasi scrittura.
  */
 
 export const APP_ENV = {
-  branch: 'beta',
-  isBeta: true,
-  defaultSandboxMode: true,
-  appName: 'Finanze (Beta Sandbox)',
-  statusDesc: '🛡️ Database Protetto',
-  mobileText: '🛡️ Sandbox'
+  branch: 'main',
+  isBeta: false,
+  defaultSandboxMode: false,
+  appName: 'Finanze - Movimenti',
+  statusDesc: 'Dati Sincronizzati',
+  mobileText: 'Finanze'
 };

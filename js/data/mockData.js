@@ -102,10 +102,25 @@ class FinanceStore {
 
   saveAccounts() {
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(this.accounts));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
+    }
   }
 
   getAccounts() {
     return [...this.accounts];
+  }
+
+  findAccount(idOrName) {
+    if (!idOrName) return null;
+    const q = String(idOrName).trim().toLowerCase();
+    // 1. Exact match by id or name
+    let found = this.accounts.find(a => a.id.toLowerCase() === q || a.name.toLowerCase() === q);
+    if (found) return found;
+
+    // 2. Fuzzy match
+    found = this.accounts.find(a => a.name.toLowerCase().includes(q) || q.includes(a.name.toLowerCase()) || a.id.toLowerCase().includes(q));
+    return found || null;
   }
 
   addAccount(account) {
@@ -214,20 +229,30 @@ class FinanceStore {
       toAccount
     };
 
-    // Aggiorna saldi conti in tempo reale
-    const accObj = this.accounts.find(a => a.name.toLowerCase() === account.toLowerCase());
-    if (accObj) {
-      if (type === 'expense') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
-      else if (type === 'income') accObj.balance = Math.round((accObj.balance + amount) * 100) / 100;
-      else if (type === 'transfer') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
-    }
-    if (type === 'transfer' && toAccount) {
-      const toAccObj = this.accounts.find(a => a.name.toLowerCase() === toAccount.toLowerCase());
-      if (toAccObj) {
+    // Aggiorna saldi conti in tempo reale con robustezza su ID e Nome
+    const accObj = this.findAccount(account);
+    const toAccObj = type === 'transfer' && toAccount ? this.findAccount(toAccount) : null;
+
+    if (type === 'transfer') {
+      if (accObj && toAccObj && accObj.id !== toAccObj.id) {
+        accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
         toAccObj.balance = Math.round((toAccObj.balance + amount) * 100) / 100;
       }
+    } else if (accObj) {
+      if (type === 'expense') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
+      else if (type === 'income') accObj.balance = Math.round((accObj.balance + amount) * 100) / 100;
     }
     this.saveAccounts();
+
+    // Sincronizza saldi remoti su Google Sheets se configurato
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        if (accObj) window.googleSheetsService.updateAccountBalance(accObj.name, accObj.balance, accObj.type);
+        if (toAccObj && toAccObj.id !== accObj.id) window.googleSheetsService.updateAccountBalance(toAccObj.name, toAccObj.balance, toAccObj.type);
+      }
+    } catch (e) {
+      console.warn('Errore sync saldo remoto:', e);
+    }
 
     this.transactions.unshift(tx);
     this.saveTransactions();
@@ -244,25 +269,126 @@ class FinanceStore {
     const account = target.account || target.fromAccount;
     const toAccount = target.toAccount;
 
-    if (account) {
-      const accObj = this.accounts.find(a => a.name.toLowerCase() === account.toLowerCase());
-      if (accObj) {
-        if (type === 'expense') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
-        else if (type === 'income') accObj.balance = Math.round((accObj.balance - amt) * 100) / 100;
-        else if (type === 'transfer') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
-      }
-    }
-    if (type === 'transfer' && toAccount) {
-      const toAccObj = this.accounts.find(a => a.name.toLowerCase() === toAccount.toLowerCase());
-      if (toAccObj) {
+    const accObj = this.findAccount(account);
+    const toAccObj = type === 'transfer' && toAccount ? this.findAccount(toAccount) : null;
+
+    if (type === 'transfer') {
+      if (accObj && toAccObj && accObj.id !== toAccObj.id) {
+        accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
         toAccObj.balance = Math.round((toAccObj.balance - amt) * 100) / 100;
       }
+    } else if (accObj) {
+      if (type === 'expense') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
+      else if (type === 'income') accObj.balance = Math.round((accObj.balance - amt) * 100) / 100;
     }
     this.saveAccounts();
+
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        if (accObj) window.googleSheetsService.updateAccountBalance(accObj.name, accObj.balance, accObj.type);
+        if (toAccObj && toAccObj.id !== accObj.id) window.googleSheetsService.updateAccountBalance(toAccObj.name, toAccObj.balance, toAccObj.type);
+      }
+    } catch (e) {}
 
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.saveTransactions();
     return true;
+  }
+
+  updateTransaction(id, updatedFields) {
+    const idx = this.transactions.findIndex(t => t.id === id);
+    if (idx === -1) return null;
+
+    const oldTx = this.transactions[idx];
+
+    // 1. Ripristina i saldi del vecchio stato
+    const oldAmt = parseFloat(oldTx.amount) || 0;
+    const oldType = oldTx.type;
+    const oldAcc = oldTx.account || oldTx.fromAccount;
+    const oldToAcc = oldTx.toAccount;
+
+    const oldAccObj = this.findAccount(oldAcc);
+    const oldToAccObj = oldType === 'transfer' && oldToAcc ? this.findAccount(oldToAcc) : null;
+
+    if (oldType === 'transfer') {
+      if (oldAccObj && oldToAccObj && oldAccObj.id !== oldToAccObj.id) {
+        oldAccObj.balance = Math.round((oldAccObj.balance + oldAmt) * 100) / 100;
+        oldToAccObj.balance = Math.round((oldToAccObj.balance - oldAmt) * 100) / 100;
+      }
+    } else if (oldAccObj) {
+      if (oldType === 'expense') oldAccObj.balance = Math.round((oldAccObj.balance + oldAmt) * 100) / 100;
+      else if (oldType === 'income') oldAccObj.balance = Math.round((oldAccObj.balance - oldAmt) * 100) / 100;
+    }
+
+    // 2. Prepara i nuovi campi
+    const rawDate = updatedFields.date || oldTx.date;
+    let formattedDate = rawDate;
+    let year = oldTx.year || '2026';
+    let month = oldTx.month || '10';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const [y, m, d] = rawDate.split('-');
+      formattedDate = `${d}/${m}/${y}`;
+      year = y;
+      month = String(parseInt(m, 10));
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+      const [d, m, y] = rawDate.split('/');
+      year = y;
+      month = String(parseInt(m, 10));
+    }
+
+    const newAmt = Math.abs(parseFloat(updatedFields.amount !== undefined ? updatedFields.amount : oldTx.amount) || 0);
+    const newType = updatedFields.type || oldTx.type || 'expense';
+    const newAcc = updatedFields.account || oldTx.account || 'Buddybank';
+    const newToAcc = updatedFields.toAccount !== undefined ? updatedFields.toAccount : (oldTx.toAccount || '');
+
+    const mergedTx = {
+      ...oldTx,
+      ...updatedFields,
+      id,
+      year,
+      month,
+      date: formattedDate,
+      description: (updatedFields.description !== undefined ? updatedFields.description : oldTx.description || '').trim(),
+      category: updatedFields.category !== undefined ? updatedFields.category : oldTx.category,
+      type: newType,
+      amount: newAmt,
+      account: newAcc,
+      fromAccount: newAcc,
+      toAccount: newToAcc
+    };
+
+    // 3. Applica i saldi con i nuovi valori
+    const newAccObj = this.findAccount(newAcc);
+    const newToAccObj = newType === 'transfer' && newToAcc ? this.findAccount(newToAcc) : null;
+
+    if (newType === 'transfer') {
+      if (newAccObj && newToAccObj && newAccObj.id !== newToAccObj.id) {
+        newAccObj.balance = Math.round((newAccObj.balance - newAmt) * 100) / 100;
+        newToAccObj.balance = Math.round((newToAccObj.balance + newAmt) * 100) / 100;
+      }
+    } else if (newAccObj) {
+      if (newType === 'expense') newAccObj.balance = Math.round((newAccObj.balance - newAmt) * 100) / 100;
+      else if (newType === 'income') newAccObj.balance = Math.round((newAccObj.balance + newAmt) * 100) / 100;
+    }
+
+    this.saveAccounts();
+
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        const affected = [oldAccObj, oldToAccObj, newAccObj, newToAccObj].filter(Boolean);
+        const uniqueNames = [...new Set(affected.map(a => a.name))];
+        uniqueNames.forEach(name => {
+          const acc = this.findAccount(name);
+          if (acc) window.googleSheetsService.updateAccountBalance(acc.name, acc.balance, acc.type);
+        });
+      }
+    } catch (e) {}
+
+    this.saveAccounts();
+    this.transactions[idx] = mergedTx;
+    this.saveTransactions();
+    return mergedTx;
   }
 
   // === METRICHE DI SINTESI (DASHBOARD & NET WORTH) ===
@@ -715,20 +841,63 @@ class FinanceStore {
 
       if (u.createTx && Math.abs(delta) > 0.001) {
         const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
+        const isInvestmentOrSavings = target.isInvestment ||
+          target.id === 'xeon' || target.id === 'vwce' ||
+          (target.name || '').toLowerCase().includes('xeon') || (target.name || '').toLowerCase().includes('vwce');
         const isPositive = delta > 0;
-        const tx = {
-          id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-          year: String(tY),
-          month: String(tM),
-          date: todayFormatted,
-          description: u.note || (isPension ? `Versamento Fondo Pensione Busta Paga (${monthName})` : `Conguaglio Saldo ${target.name} (${monthName})`),
-          category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
-          type: isPositive ? 'income' : 'expense',
-          amount: Math.abs(delta),
-          account: target.name,
-          fromAccount: target.name,
-          toAccount: ''
-        };
+
+        let tx;
+        if (isInvestmentOrSavings && isPositive) {
+          const isPAC = target.id === 'vwce' || (target.name || '').toLowerCase().includes('vwce');
+          const sourceAcc = this.findAccount('Buddybank');
+          if (sourceAcc) {
+            sourceAcc.balance = Math.round((sourceAcc.balance - Math.abs(delta)) * 100) / 100;
+            const existingBuddy = modifiedAccounts.find(m => m.name.toLowerCase() === sourceAcc.name.toLowerCase());
+            if (existingBuddy) {
+              existingBuddy.newBal = sourceAcc.balance;
+              existingBuddy.delta = Math.round((existingBuddy.delta - Math.abs(delta)) * 100) / 100;
+            } else {
+              modifiedAccounts.push({
+                name: sourceAcc.name,
+                oldBal: Math.round((sourceAcc.balance + Math.abs(delta)) * 100) / 100,
+                newBal: sourceAcc.balance,
+                delta: -Math.abs(delta)
+              });
+            }
+            if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+              window.googleSheetsService.updateAccountBalance(sourceAcc.name, sourceAcc.balance, sourceAcc.type);
+            }
+          }
+
+          tx = {
+            id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            year: String(tY),
+            month: String(tM),
+            date: todayFormatted,
+            description: u.note || (isPAC ? `Giroconto PAC VWCE (${monthName})` : `Giroconto reintegro Fondo Emergenza XEON (${monthName})`),
+            category: isPAC ? '🛅 Livello Crescita' : '🏦 Fondo di emergenza',
+            type: 'transfer',
+            rawType: 'Trasferimento',
+            amount: Math.abs(delta),
+            account: sourceAcc ? sourceAcc.name : 'Buddybank',
+            fromAccount: sourceAcc ? sourceAcc.name : 'Buddybank',
+            toAccount: target.name
+          };
+        } else {
+          tx = {
+            id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            year: String(tY),
+            month: String(tM),
+            date: todayFormatted,
+            description: u.note || (isPension ? `Versamento Fondo Pensione Busta Paga (${monthName})` : `Conguaglio Saldo ${target.name} (${monthName})`),
+            category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
+            type: isPositive ? 'income' : 'expense',
+            amount: Math.abs(delta),
+            account: target.name,
+            fromAccount: target.name,
+            toAccount: ''
+          };
+        }
         this.transactions.unshift(tx);
         createdTransactions.push(tx);
       }

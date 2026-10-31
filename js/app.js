@@ -199,6 +199,19 @@ class AppController {
     const mPrivacyBtn = document.getElementById('mobile-privacy-toggle-btn');
     if (mPrivacyBtn) mPrivacyBtn.addEventListener('click', togglePrivacy);
 
+    // Ascolto aggiornamenti saldi conti in tempo reale per re-render reattivo
+    window.addEventListener('finanze:accounts-updated', () => {
+      const container = document.getElementById('main-viewport');
+      if (!container) return;
+      if (this.currentTab === 'dashboard') {
+        this.dashboardView.render(container);
+      } else if (this.currentTab === 'impostazioni') {
+        this.impostazioniView.render(container);
+      } else if (this.currentTab === 'investimenti') {
+        this.investimentiView.render(container);
+      }
+    });
+
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const tab = e.currentTarget.dataset.tab;

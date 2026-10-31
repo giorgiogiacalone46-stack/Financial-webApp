@@ -4,20 +4,20 @@
 // === js/config/environment.js ===
 /**
  * Configurazione Ambiente Applicazione
- * Branch: beta (Laboratorio R&D / Sviluppo Attivo)
+ * Branch: main (Produzione / Stabile)
  * 
  * Regola Costituzionale:
- * - In beta: Sandbox attiva di default per proteggere il database reale da qualsiasi scrittura.
  * - In main (produzione): Sincronizzazione reale attiva di default con Google Sheets.
+ * - In beta: Sandbox attiva di default per proteggere il database reale da qualsiasi scrittura.
  */
 
 const APP_ENV = {
-  branch: 'beta',
-  isBeta: true,
-  defaultSandboxMode: true,
-  appName: 'Finanze (Beta Sandbox)',
-  statusDesc: '🛡️ Database Protetto',
-  mobileText: '🛡️ Sandbox'
+  branch: 'main',
+  isBeta: false,
+  defaultSandboxMode: false,
+  appName: 'Finanze - Movimenti',
+  statusDesc: 'Dati Sincronizzati',
+  mobileText: 'Finanze'
 };
 
 // === js/components/icons.js ===
@@ -10514,54 +10514,6 @@ const INITIAL_TRANSACTIONS = [
     "year": "2026",
     "week": "39",
     "month": "9",
-    "date": "26/09/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 44.67,
-    "category": "❔Altro",
-    "description": "regalo serena rata 1"
-  },
-  {
-    "id": "tx_617",
-    "rowNumber": 618,
-    "year": "2026",
-    "week": "44",
-    "month": "10",
-    "date": "26/10/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 44.67,
-    "category": "❔Altro",
-    "description": "regalo serena rata 2"
-  },
-  {
-    "id": "tx_618",
-    "rowNumber": 619,
-    "year": "2026",
-    "week": "48",
-    "month": "11",
-    "date": "26/11/2026",
-    "type": "expense",
-    "rawType": "Uscita",
-    "fromAccount": "Buddybank",
-    "toAccount": "",
-    "account": "Buddybank",
-    "amount": 44.67,
-    "category": "❔Altro",
-    "description": "regalo serena rata 3"
-  },
-  {
-    "id": "tx_619",
-    "rowNumber": 620,
-    "year": "2026",
-    "week": "39",
-    "month": "9",
     "date": "25/09/2026",
     "type": "expense",
     "rawType": "Uscita",
@@ -10573,8 +10525,24 @@ const INITIAL_TRANSACTIONS = [
     "description": "scopa elettrica rata 1"
   },
   {
-    "id": "tx_620",
-    "rowNumber": 621,
+    "id": "tx_617",
+    "rowNumber": 618,
+    "year": "2026",
+    "week": "39",
+    "month": "9",
+    "date": "26/09/2026",
+    "type": "expense",
+    "rawType": "Uscita",
+    "fromAccount": "Buddybank",
+    "toAccount": "",
+    "account": "Buddybank",
+    "amount": 44.67,
+    "category": "❔Altro",
+    "description": "regalo serena rata 1"
+  },
+  {
+    "id": "tx_618",
+    "rowNumber": 619,
     "year": "2026",
     "week": "44",
     "month": "10",
@@ -10589,8 +10557,56 @@ const INITIAL_TRANSACTIONS = [
     "description": "scopa elettrica rata 2"
   },
   {
+    "id": "tx_619",
+    "rowNumber": 620,
+    "year": "2026",
+    "week": "44",
+    "month": "10",
+    "date": "26/10/2026",
+    "type": "expense",
+    "rawType": "Uscita",
+    "fromAccount": "Buddybank",
+    "toAccount": "",
+    "account": "Buddybank",
+    "amount": 44.67,
+    "category": "❔Altro",
+    "description": "regalo serena rata 2"
+  },
+  {
+    "id": "tx_620",
+    "rowNumber": 621,
+    "year": "2026",
+    "week": "44",
+    "month": "10",
+    "date": "31/10/2026",
+    "type": "transfer",
+    "rawType": "Trasferimento",
+    "fromAccount": "Buddybank",
+    "toAccount": "Trade Republic - VWCE",
+    "account": "Buddybank",
+    "amount": 200.0,
+    "category": "🛅 Livello Crescita",
+    "description": "Giroconto PAC VWCE"
+  },
+  {
     "id": "tx_621",
     "rowNumber": 622,
+    "year": "2026",
+    "week": "44",
+    "month": "10",
+    "date": "31/10/2026",
+    "type": "transfer",
+    "rawType": "Trasferimento",
+    "fromAccount": "Buddybank",
+    "toAccount": "Trade Republic - XEON",
+    "account": "Buddybank",
+    "amount": 1495.0,
+    "category": "🏦 Fondo di emergenza",
+    "description": "Giroconto reintegro Fondo Emergenza XEON"
+  },
+  {
+    "id": "tx_622",
+    "rowNumber": 623,
     "year": "2026",
     "week": "48",
     "month": "11",
@@ -10603,6 +10619,22 @@ const INITIAL_TRANSACTIONS = [
     "amount": 33.67,
     "category": "❔Altro",
     "description": "scopa elettrica rata 3"
+  },
+  {
+    "id": "tx_623",
+    "rowNumber": 624,
+    "year": "2026",
+    "week": "48",
+    "month": "11",
+    "date": "26/11/2026",
+    "type": "expense",
+    "rawType": "Uscita",
+    "fromAccount": "Buddybank",
+    "toAccount": "",
+    "account": "Buddybank",
+    "amount": 44.67,
+    "category": "❔Altro",
+    "description": "regalo serena rata 3"
   }
 ];
 
@@ -10710,10 +10742,25 @@ class FinanceStore {
 
   saveAccounts() {
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(this.accounts));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
+    }
   }
 
   getAccounts() {
     return [...this.accounts];
+  }
+
+  findAccount(idOrName) {
+    if (!idOrName) return null;
+    const q = String(idOrName).trim().toLowerCase();
+    // 1. Exact match by id or name
+    let found = this.accounts.find(a => a.id.toLowerCase() === q || a.name.toLowerCase() === q);
+    if (found) return found;
+
+    // 2. Fuzzy match
+    found = this.accounts.find(a => a.name.toLowerCase().includes(q) || q.includes(a.name.toLowerCase()) || a.id.toLowerCase().includes(q));
+    return found || null;
   }
 
   addAccount(account) {
@@ -10822,20 +10869,30 @@ class FinanceStore {
       toAccount
     };
 
-    // Aggiorna saldi conti in tempo reale
-    const accObj = this.accounts.find(a => a.name.toLowerCase() === account.toLowerCase());
-    if (accObj) {
-      if (type === 'expense') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
-      else if (type === 'income') accObj.balance = Math.round((accObj.balance + amount) * 100) / 100;
-      else if (type === 'transfer') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
-    }
-    if (type === 'transfer' && toAccount) {
-      const toAccObj = this.accounts.find(a => a.name.toLowerCase() === toAccount.toLowerCase());
-      if (toAccObj) {
+    // Aggiorna saldi conti in tempo reale con robustezza su ID e Nome
+    const accObj = this.findAccount(account);
+    const toAccObj = type === 'transfer' && toAccount ? this.findAccount(toAccount) : null;
+
+    if (type === 'transfer') {
+      if (accObj && toAccObj && accObj.id !== toAccObj.id) {
+        accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
         toAccObj.balance = Math.round((toAccObj.balance + amount) * 100) / 100;
       }
+    } else if (accObj) {
+      if (type === 'expense') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
+      else if (type === 'income') accObj.balance = Math.round((accObj.balance + amount) * 100) / 100;
     }
     this.saveAccounts();
+
+    // Sincronizza saldi remoti su Google Sheets se configurato
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        if (accObj) window.googleSheetsService.updateAccountBalance(accObj.name, accObj.balance, accObj.type);
+        if (toAccObj && toAccObj.id !== accObj.id) window.googleSheetsService.updateAccountBalance(toAccObj.name, toAccObj.balance, toAccObj.type);
+      }
+    } catch (e) {
+      console.warn('Errore sync saldo remoto:', e);
+    }
 
     this.transactions.unshift(tx);
     this.saveTransactions();
@@ -10852,25 +10909,126 @@ class FinanceStore {
     const account = target.account || target.fromAccount;
     const toAccount = target.toAccount;
 
-    if (account) {
-      const accObj = this.accounts.find(a => a.name.toLowerCase() === account.toLowerCase());
-      if (accObj) {
-        if (type === 'expense') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
-        else if (type === 'income') accObj.balance = Math.round((accObj.balance - amt) * 100) / 100;
-        else if (type === 'transfer') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
-      }
-    }
-    if (type === 'transfer' && toAccount) {
-      const toAccObj = this.accounts.find(a => a.name.toLowerCase() === toAccount.toLowerCase());
-      if (toAccObj) {
+    const accObj = this.findAccount(account);
+    const toAccObj = type === 'transfer' && toAccount ? this.findAccount(toAccount) : null;
+
+    if (type === 'transfer') {
+      if (accObj && toAccObj && accObj.id !== toAccObj.id) {
+        accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
         toAccObj.balance = Math.round((toAccObj.balance - amt) * 100) / 100;
       }
+    } else if (accObj) {
+      if (type === 'expense') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
+      else if (type === 'income') accObj.balance = Math.round((accObj.balance - amt) * 100) / 100;
     }
     this.saveAccounts();
+
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        if (accObj) window.googleSheetsService.updateAccountBalance(accObj.name, accObj.balance, accObj.type);
+        if (toAccObj && toAccObj.id !== accObj.id) window.googleSheetsService.updateAccountBalance(toAccObj.name, toAccObj.balance, toAccObj.type);
+      }
+    } catch (e) {}
 
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.saveTransactions();
     return true;
+  }
+
+  updateTransaction(id, updatedFields) {
+    const idx = this.transactions.findIndex(t => t.id === id);
+    if (idx === -1) return null;
+
+    const oldTx = this.transactions[idx];
+
+    // 1. Ripristina i saldi del vecchio stato
+    const oldAmt = parseFloat(oldTx.amount) || 0;
+    const oldType = oldTx.type;
+    const oldAcc = oldTx.account || oldTx.fromAccount;
+    const oldToAcc = oldTx.toAccount;
+
+    const oldAccObj = this.findAccount(oldAcc);
+    const oldToAccObj = oldType === 'transfer' && oldToAcc ? this.findAccount(oldToAcc) : null;
+
+    if (oldType === 'transfer') {
+      if (oldAccObj && oldToAccObj && oldAccObj.id !== oldToAccObj.id) {
+        oldAccObj.balance = Math.round((oldAccObj.balance + oldAmt) * 100) / 100;
+        oldToAccObj.balance = Math.round((oldToAccObj.balance - oldAmt) * 100) / 100;
+      }
+    } else if (oldAccObj) {
+      if (oldType === 'expense') oldAccObj.balance = Math.round((oldAccObj.balance + oldAmt) * 100) / 100;
+      else if (oldType === 'income') oldAccObj.balance = Math.round((oldAccObj.balance - oldAmt) * 100) / 100;
+    }
+
+    // 2. Prepara i nuovi campi
+    const rawDate = updatedFields.date || oldTx.date;
+    let formattedDate = rawDate;
+    let year = oldTx.year || '2026';
+    let month = oldTx.month || '10';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const [y, m, d] = rawDate.split('-');
+      formattedDate = `${d}/${m}/${y}`;
+      year = y;
+      month = String(parseInt(m, 10));
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+      const [d, m, y] = rawDate.split('/');
+      year = y;
+      month = String(parseInt(m, 10));
+    }
+
+    const newAmt = Math.abs(parseFloat(updatedFields.amount !== undefined ? updatedFields.amount : oldTx.amount) || 0);
+    const newType = updatedFields.type || oldTx.type || 'expense';
+    const newAcc = updatedFields.account || oldTx.account || 'Buddybank';
+    const newToAcc = updatedFields.toAccount !== undefined ? updatedFields.toAccount : (oldTx.toAccount || '');
+
+    const mergedTx = {
+      ...oldTx,
+      ...updatedFields,
+      id,
+      year,
+      month,
+      date: formattedDate,
+      description: (updatedFields.description !== undefined ? updatedFields.description : oldTx.description || '').trim(),
+      category: updatedFields.category !== undefined ? updatedFields.category : oldTx.category,
+      type: newType,
+      amount: newAmt,
+      account: newAcc,
+      fromAccount: newAcc,
+      toAccount: newToAcc
+    };
+
+    // 3. Applica i saldi con i nuovi valori
+    const newAccObj = this.findAccount(newAcc);
+    const newToAccObj = newType === 'transfer' && newToAcc ? this.findAccount(newToAcc) : null;
+
+    if (newType === 'transfer') {
+      if (newAccObj && newToAccObj && newAccObj.id !== newToAccObj.id) {
+        newAccObj.balance = Math.round((newAccObj.balance - newAmt) * 100) / 100;
+        newToAccObj.balance = Math.round((newToAccObj.balance + newAmt) * 100) / 100;
+      }
+    } else if (newAccObj) {
+      if (newType === 'expense') newAccObj.balance = Math.round((newAccObj.balance - newAmt) * 100) / 100;
+      else if (newType === 'income') newAccObj.balance = Math.round((newAccObj.balance + newAmt) * 100) / 100;
+    }
+
+    this.saveAccounts();
+
+    try {
+      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+        const affected = [oldAccObj, oldToAccObj, newAccObj, newToAccObj].filter(Boolean);
+        const uniqueNames = [...new Set(affected.map(a => a.name))];
+        uniqueNames.forEach(name => {
+          const acc = this.findAccount(name);
+          if (acc) window.googleSheetsService.updateAccountBalance(acc.name, acc.balance, acc.type);
+        });
+      }
+    } catch (e) {}
+
+    this.saveAccounts();
+    this.transactions[idx] = mergedTx;
+    this.saveTransactions();
+    return mergedTx;
   }
 
   // === METRICHE DI SINTESI (DASHBOARD & NET WORTH) ===
@@ -11323,20 +11481,63 @@ class FinanceStore {
 
       if (u.createTx && Math.abs(delta) > 0.001) {
         const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
+        const isInvestmentOrSavings = target.isInvestment ||
+          target.id === 'xeon' || target.id === 'vwce' ||
+          (target.name || '').toLowerCase().includes('xeon') || (target.name || '').toLowerCase().includes('vwce');
         const isPositive = delta > 0;
-        const tx = {
-          id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-          year: String(tY),
-          month: String(tM),
-          date: todayFormatted,
-          description: u.note || (isPension ? `Versamento Fondo Pensione Busta Paga (${monthName})` : `Conguaglio Saldo ${target.name} (${monthName})`),
-          category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
-          type: isPositive ? 'income' : 'expense',
-          amount: Math.abs(delta),
-          account: target.name,
-          fromAccount: target.name,
-          toAccount: ''
-        };
+
+        let tx;
+        if (isInvestmentOrSavings && isPositive) {
+          const isPAC = target.id === 'vwce' || (target.name || '').toLowerCase().includes('vwce');
+          const sourceAcc = this.findAccount('Buddybank');
+          if (sourceAcc) {
+            sourceAcc.balance = Math.round((sourceAcc.balance - Math.abs(delta)) * 100) / 100;
+            const existingBuddy = modifiedAccounts.find(m => m.name.toLowerCase() === sourceAcc.name.toLowerCase());
+            if (existingBuddy) {
+              existingBuddy.newBal = sourceAcc.balance;
+              existingBuddy.delta = Math.round((existingBuddy.delta - Math.abs(delta)) * 100) / 100;
+            } else {
+              modifiedAccounts.push({
+                name: sourceAcc.name,
+                oldBal: Math.round((sourceAcc.balance + Math.abs(delta)) * 100) / 100,
+                newBal: sourceAcc.balance,
+                delta: -Math.abs(delta)
+              });
+            }
+            if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+              window.googleSheetsService.updateAccountBalance(sourceAcc.name, sourceAcc.balance, sourceAcc.type);
+            }
+          }
+
+          tx = {
+            id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            year: String(tY),
+            month: String(tM),
+            date: todayFormatted,
+            description: u.note || (isPAC ? `Giroconto PAC VWCE (${monthName})` : `Giroconto reintegro Fondo Emergenza XEON (${monthName})`),
+            category: isPAC ? '🛅 Livello Crescita' : '🏦 Fondo di emergenza',
+            type: 'transfer',
+            rawType: 'Trasferimento',
+            amount: Math.abs(delta),
+            account: sourceAcc ? sourceAcc.name : 'Buddybank',
+            fromAccount: sourceAcc ? sourceAcc.name : 'Buddybank',
+            toAccount: target.name
+          };
+        } else {
+          tx = {
+            id: 'tx_rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            year: String(tY),
+            month: String(tM),
+            date: todayFormatted,
+            description: u.note || (isPension ? `Versamento Fondo Pensione Busta Paga (${monthName})` : `Conguaglio Saldo ${target.name} (${monthName})`),
+            category: isPension ? '🛅 Livello Crescita' : '⚖️ Conguaglio / Rettifica',
+            type: isPositive ? 'income' : 'expense',
+            amount: Math.abs(delta),
+            account: target.name,
+            fromAccount: target.name,
+            toAccount: ''
+          };
+        }
         this.transactions.unshift(tx);
         createdTransactions.push(tx);
       }
@@ -12393,22 +12594,14 @@ class GoogleSheetsService {
     this.securityToken = localStorage.getItem(SHEETS_STORAGE_KEYS.SECURITY_TOKEN) || '';
     this.autoSync = localStorage.getItem(SHEETS_STORAGE_KEYS.AUTO_SYNC) !== 'false';
 
-    // Rilevamento automatico dell'ambiente:
-    // 1. Host GitHub Pages (*.github.io): è la produzione cloud ufficiale (main) -> Sandbox disattivata di default.
-    // 2. Altrimenti legge il branch corrente (APP_ENV.isBeta):
-    //    - Su branch 'beta': Sandbox ATTIVA di default per blindare il database reale durante test e R&D.
-    //    - Su branch 'main': Sandbox DISATTIVATA di default per sincronizzare direttamente su Google Sheets.
-    const isProductionHost = typeof window !== 'undefined' && Boolean(window.location && typeof window.location.hostname === 'string' && window.location.hostname.includes('github.io'));
-    const isBetaEnvironment = !isProductionHost && (typeof APP_ENV !== 'undefined' ? APP_ENV.isBeta : false);
-
-    this.isBeta = isBetaEnvironment;
-
-    // Preferenza utente salvata in localStorage (ha precedenza se impostata esplicitamente tramite switch nelle Impostazioni)
+    // Sincronizzazione Reale: Se l'utente configura la Web App di Google Apps Script,
+    // la sincronizzazione cloud deve essere SEMPRE attiva e prioritaria sia da PC che da Smartphone.
+    // La Sandbox è disattivata di default in modo che nessuna modifica vada persa in locale.
     const storedSandbox = localStorage.getItem(SHEETS_STORAGE_KEYS.SANDBOX_MODE);
     if (storedSandbox !== null) {
       this.sandboxMode = storedSandbox === 'true';
     } else {
-      this.sandboxMode = isBetaEnvironment;
+      this.sandboxMode = false; // Sempre falso di default: sincronizzazione live reale attiva!
     }
 
     this.isOnline = navigator.onLine;
@@ -12566,6 +12759,47 @@ class GoogleSheetsService {
       throw new Error(res.message);
     } catch (err) {
       console.error('Errore scrittura su Google Sheets:', err);
+      this.syncStatus = 'error';
+      this.updateStatusBadge();
+      return { success: false, error: err.message };
+    }
+  }
+
+  async updateTransaction(rowNumber, transaction) {
+    if (this.sandboxMode) {
+      console.log('🛡️ [Sandbox] Aggiornamento remoto bloccato.');
+      return { success: true, localOnly: true, sandbox: true };
+    }
+
+    if (!this.isConfigured() || !rowNumber) return { success: true, localOnly: true };
+
+    try {
+      this.syncStatus = 'syncing';
+      this.updateStatusBadge();
+
+      const payload = {
+        action: 'updateTransaction',
+        token: this.securityToken,
+        rowNumber: rowNumber,
+        transaction: transaction
+      };
+
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      const res = await response.json();
+      if (res.status === 'success') {
+        this.syncStatus = 'connected';
+        localStorage.setItem(SHEETS_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+        this.updateStatusBadge();
+        return { success: true };
+      }
+      throw new Error(res.message);
+    } catch (err) {
+      console.error('Errore modifica su Google Sheets:', err);
       this.syncStatus = 'error';
       this.updateStatusBadge();
       return { success: false, error: err.message };
@@ -13105,6 +13339,7 @@ class MonthlyClosingModal {
 
   renderAccountRow(acc, status) {
     const isPension = acc.isPension || (acc.type || '').toLowerCase().includes('pension');
+    const isInvestment = acc.isInvestment || acc.id === 'xeon' || acc.id === 'vwce' || (acc.name || '').toLowerCase().includes('xeon') || (acc.name || '').toLowerCase().includes('vwce');
     const recMonth = acc.lastReconciledMonth || (isPension ? '09/2026' : '10/2026');
     const isStale = (recMonth !== this.targetMonth);
     const defaultMode = acc.defaultMode || (isPension ? 'delta' : 'balance');
@@ -13189,10 +13424,10 @@ class MonthlyClosingModal {
         <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary);">
           <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
             <input type="checkbox" id="check-tx-${acc.name}" data-account="${acc.name}" checked style="accent-color: var(--apple-blue);" />
-            <span>Crea movimento di conguaglio/versamento nel registro</span>
+            <span>${isInvestment ? 'Registra come giroconto da Buddybank' : (isPension ? 'Crea versamento nel registro' : 'Crea movimento di conguaglio')}</span>
           </label>
           <span style="font-size: 11px; color: var(--text-tertiary);">
-            ${isPension ? 'Cat: 🛅 Livello Crescita' : 'Cat: ⚖️ Conguaglio'}
+            ${isInvestment ? (acc.id === 'vwce' || (acc.name || '').toLowerCase().includes('vwce') ? 'Giroconto: 🛅 Livello Crescita' : 'Giroconto: 🏦 Fondo emergenza') : (isPension ? 'Cat: 🛅 Livello Crescita' : 'Cat: ⚖️ Conguaglio')}
           </span>
         </div>
 
@@ -15004,9 +15239,13 @@ class MovimentiView {
       type: 'all',       // 'all' | 'income' | 'expense' | 'transfer'
       category: 'all',
       account: 'all',
-      sortBy: 'date-desc'
+      sortBy: 'date-desc',
+      period: 'all',     // 'all' | 'current_month' | 'last_30_days' | 'last_3_months' | 'last_6_months' | 'current_year' | 'custom'
+      customFrom: '',
+      customTo: ''
     };
     this.modalOpen = false;
+    this.editingTxId = null; // null = nuovo movimento, string = id movimento in modifica
   }
 
   formatCurrency(value) {
@@ -15039,6 +15278,63 @@ class MovimentiView {
       return dateStr.replace(/-/g, '');
     }
     return dateStr;
+  }
+
+  parseDateObject(dateStr) {
+    if (!dateStr) return null;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split('/');
+      return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-');
+      return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    }
+    return null;
+  }
+
+  filterByPeriod(txs, period, customFrom, customTo) {
+    const refDate = new Date(2026, 9, 31, 23, 59, 59); // 31 Ottobre 2026
+
+    return txs.filter(t => {
+      const d = this.parseDateObject(t.date);
+      if (!d) return true;
+
+      switch (period) {
+        case 'current_month':
+          return d.getFullYear() === refDate.getFullYear() && d.getMonth() === refDate.getMonth();
+        case 'last_30_days': {
+          const past30 = new Date(refDate);
+          past30.setDate(past30.getDate() - 30);
+          return d >= past30 && d <= refDate;
+        }
+        case 'last_3_months': {
+          const past90 = new Date(refDate);
+          past90.setMonth(past90.getMonth() - 3);
+          return d >= past90 && d <= refDate;
+        }
+        case 'last_6_months': {
+          const past180 = new Date(refDate);
+          past180.setMonth(past180.getMonth() - 6);
+          return d >= past180 && d <= refDate;
+        }
+        case 'current_year':
+          return d.getFullYear() === refDate.getFullYear();
+        case 'custom': {
+          if (customFrom) {
+            const fromD = new Date(customFrom + 'T00:00:00');
+            if (d < fromD) return false;
+          }
+          if (customTo) {
+            const toD = new Date(customTo + 'T23:59:59');
+            if (d > toD) return false;
+          }
+          return true;
+        }
+        default:
+          return true;
+      }
+    });
   }
 
   formatDateParts(dateStr) {
@@ -15172,6 +15468,11 @@ class MovimentiView {
         (t.fromAccount && t.fromAccount.toLowerCase().includes(acc)) ||
         (t.toAccount && t.toAccount.toLowerCase().includes(acc))
       );
+    }
+
+    // Filtro per periodo di riferimento
+    if (this.filters.period && this.filters.period !== 'all') {
+      txs = this.filterByPeriod(txs, this.filters.period, this.filters.customFrom, this.filters.customTo);
     }
 
     switch (this.filters.sortBy) {
@@ -15507,8 +15808,21 @@ class MovimentiView {
           </div>
         </div>
 
-        <!-- Filter Dropdowns Row: Category, Account, Sort -->
+        <!-- Filter Dropdowns Row: Period, Category, Account, Sort -->
         <div class="mov-controls-filters">
+          <div class="apple-select-wrapper">
+            <select id="mov-period-filter" class="apple-select">
+              <option value="all" ${this.filters.period === 'all' ? 'selected' : ''}>Tutto lo Storico</option>
+              <option value="current_month" ${this.filters.period === 'current_month' ? 'selected' : ''}>Mese Corrente (Ott 2026)</option>
+              <option value="last_30_days" ${this.filters.period === 'last_30_days' ? 'selected' : ''}>Ultimi 30 Giorni</option>
+              <option value="last_3_months" ${this.filters.period === 'last_3_months' ? 'selected' : ''}>Ultimi 3 Mesi</option>
+              <option value="last_6_months" ${this.filters.period === 'last_6_months' ? 'selected' : ''}>Ultimi 6 Mesi</option>
+              <option value="current_year" ${this.filters.period === 'current_year' ? 'selected' : ''}>Anno 2026</option>
+              <option value="custom" ${this.filters.period === 'custom' ? 'selected' : ''}>Intervallo Personalizzato...</option>
+            </select>
+            <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+
           <div class="apple-select-wrapper">
             <select id="mov-category-filter" class="apple-select">
               <option value="all" ${this.filters.category === 'all' ? 'selected' : ''}>Tutte le Categorie</option>
@@ -15539,6 +15853,23 @@ class MovimentiView {
             ${stats.count} movimenti
           </span>
         </div>
+
+        <!-- Custom Date Range Bar (Conditional) -->
+        ${this.filters.period === 'custom' ? `
+          <div class="mov-custom-date-row" style="display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label class="form-label" style="margin: 0; font-size: 12px; font-weight: 600;">Dal:</label>
+              <input type="date" id="mov-custom-from" class="apple-input" style="padding: 4px 10px; font-size: 13px; height: 32px;" value="${this.filters.customFrom || ''}" />
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label class="form-label" style="margin: 0; font-size: 12px; font-weight: 600;">Al:</label>
+              <input type="date" id="mov-custom-to" class="apple-input" style="padding: 4px 10px; font-size: 13px; height: 32px;" value="${this.filters.customTo || ''}" />
+            </div>
+            <button class="apple-btn-secondary" id="btn-apply-custom-dates" style="height: 32px; padding: 0 12px; font-size: 12px;">
+              Applica Filtro Date
+            </button>
+          </div>
+        ` : ''}
       </section>
 
       <!-- Main Transactions Content: Grouped List or Data Table -->
@@ -15619,7 +15950,7 @@ class MovimentiView {
       : (tx.account || 'Buddybank');
 
     return `
-      <div class="tx-apple-row" data-id="${tx.id}">
+      <div class="tx-apple-row tx-interactive-row" data-id="${tx.id}" style="cursor: pointer;" title="Clicca per visualizzare dettagli e modificare">
         <div class="tx-avatar ${avatarClass}">
           ${catIcon}
         </div>
@@ -15660,7 +15991,7 @@ class MovimentiView {
       : (tx.account || 'Buddybank');
 
     return `
-      <div class="mov-table-row" data-id="${tx.id}">
+      <div class="mov-table-row tx-interactive-row" data-id="${tx.id}" style="cursor: pointer;" title="Clicca per visualizzare dettagli e modificare">
         <div class="mov-col mov-col-date">
           <span>${day}</span>
           <span class="date-sub">${monthYear}</span>
@@ -16452,13 +16783,24 @@ class MovimentiView {
             </div>
 
             <div class="form-group" id="form-group-to-account" style="display: none;">
-              <label class="form-label" for="form-to-account">Conto di Accredito (Destinazione)</label>
+              <label class="form-label" for="form-to-account" id="form-to-account-label">Conto di Accredito (Destinazione)</label>
               <div class="apple-select-wrapper form-select-wrapper">
                 <select id="form-to-account" class="apple-select apple-input">
                   ${accounts.map(a => `<option value="${a.name}">${a.name} ${financeStore.isPrivacyMode() ? '' : `(${this.formatCurrency(a.balance)})`}</option>`).join('')}
                 </select>
                 <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
+            </div>
+
+            <!-- Apple Live Transfer Preview Card -->
+            <div id="form-transfer-preview-card" style="display: none; margin-top: var(--space-box-gap-xs); padding: 12px 14px; border-radius: 14px; background: rgba(0, 113, 227, 0.06); border: 1px solid rgba(0, 113, 227, 0.16); transition: all 0.2s ease;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--apple-blue); display: flex; align-items: center; gap: 6px;">
+                  ${getIcon('giroconto', 14)} Impatto Saldi in Tempo Reale
+                </span>
+                <span id="transfer-preview-status-badge" class="badge badge--info" style="font-size: 10px;">Giroconto</span>
+              </div>
+              <div id="transfer-preview-content" style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;"></div>
             </div>
 
           </form>
@@ -16477,7 +16819,85 @@ class MovimentiView {
 
     const typeToggle = document.getElementById('form-type-toggle');
     const toAccGroup = document.getElementById('form-group-to-account');
+    const catGroup = document.getElementById('form-group-category');
     const accLabel = document.getElementById('form-account-label');
+    const formAccount = document.getElementById('form-account');
+    const formToAccount = document.getElementById('form-to-account');
+    const formAmount = document.getElementById('form-amount');
+
+    const updateTransferPreview = () => {
+      const activeBtn = typeToggle?.querySelector('.segment-btn.active');
+      const isTransfer = activeBtn?.dataset.type === 'transfer';
+      const previewCard = document.getElementById('form-transfer-preview-card');
+      const previewContent = document.getElementById('transfer-preview-content');
+      const previewBadge = document.getElementById('transfer-preview-status-badge');
+
+      if (!isTransfer || !previewCard || !previewContent) {
+        if (previewCard) previewCard.style.display = 'none';
+        return;
+      }
+
+      previewCard.style.display = 'block';
+      const fromName = formAccount?.value || '';
+      const toName = formToAccount?.value || '';
+      const amt = parseFloat(formAmount?.value || 0);
+
+      const fromAcc = financeStore.findAccount(fromName);
+      const toAcc = financeStore.findAccount(toName);
+
+      if (!fromAcc || !toAcc || fromAcc.name === toAcc.name) {
+        if (previewBadge) {
+          previewBadge.className = 'badge badge--negative';
+          previewBadge.textContent = 'Errore';
+        }
+        previewCard.style.background = 'rgba(255, 59, 48, 0.08)';
+        previewCard.style.borderColor = 'rgba(255, 59, 48, 0.28)';
+        previewContent.innerHTML = `
+          <div style="color: var(--apple-red); font-weight: 600; font-size: 11.5px; display: flex; align-items: center; gap: 6px; padding: 2px 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>Il conto di partenza e di arrivo non possono coincidere. Seleziona due conti distinti.</span>
+          </div>
+        `;
+        return;
+      }
+
+      previewCard.style.background = 'rgba(0, 113, 227, 0.06)';
+      previewCard.style.borderColor = 'rgba(0, 113, 227, 0.16)';
+      if (previewBadge) {
+        previewBadge.className = 'badge badge--info';
+        previewBadge.textContent = amt > 0 ? 'Valido' : 'Inserisci Importo';
+      }
+
+      const fromOld = parseFloat(fromAcc.balance) || 0;
+      const fromNew = Math.round((fromOld - amt) * 100) / 100;
+      const toOld = parseFloat(toAcc.balance) || 0;
+      const toNew = Math.round((toOld + amt) * 100) / 100;
+
+      previewContent.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 0;">
+          <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px;">
+            <span style="color: var(--apple-red); font-weight: 600;">📤 Origine:</span> <strong>${fromAcc.name}</strong>
+          </span>
+          <span style="font-variant-numeric: tabular-nums;">
+            ${this.formatCurrency(fromOld)} ➔ <strong style="color: var(--apple-red);">${this.formatCurrency(fromNew)}</strong>
+          </span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-top: 1px dashed var(--border-subtle);">
+          <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px;">
+            <span style="color: var(--apple-green); font-weight: 600;">📥 Destinazione:</span> <strong>${toAcc.name}</strong>
+          </span>
+          <span style="font-variant-numeric: tabular-nums;">
+            ${this.formatCurrency(toOld)} ➔ <strong style="color: var(--apple-green);">${this.formatCurrency(toNew)}</strong>
+          </span>
+        </div>
+        <div style="margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--border-subtle); font-size: 11px; color: var(--text-tertiary); display: flex; justify-content: space-between;">
+          <span>Variazione Net Worth complessivo:</span>
+          <strong style="color: var(--text-secondary);">± 0,00 € (Trasferimento interno)</strong>
+        </div>
+      `;
+    };
+
+    this._updateTransferPreview = updateTransferPreview;
 
     if (typeToggle) {
       typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
@@ -16489,12 +16909,37 @@ class MovimentiView {
           if (toAccGroup) {
             toAccGroup.style.display = currentType === 'transfer' ? 'block' : 'none';
           }
-          if (accLabel) {
-            accLabel.textContent = currentType === 'transfer' ? 'Conto Origine' : (currentType === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+          if (catGroup) {
+            catGroup.style.display = currentType === 'transfer' ? 'none' : 'block';
           }
+          if (accLabel) {
+            accLabel.textContent = currentType === 'transfer' ? 'Conto di Origine (Preleva da)' : (currentType === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+          }
+
+          // Se è giroconto e il conto di destinazione coincide con l'origine, auto-seleziona il successivo
+          if (currentType === 'transfer' && formAccount && formToAccount) {
+            if (formAccount.value === formToAccount.value) {
+              const diffAcc = accounts.find(a => a.name !== formAccount.value);
+              if (diffAcc) formToAccount.value = diffAcc.name;
+            }
+          }
+
+          updateTransferPreview();
         });
       });
     }
+
+    if (formAccount) formAccount.addEventListener('change', () => {
+      const activeBtn = typeToggle?.querySelector('.segment-btn.active');
+      if (activeBtn?.dataset.type === 'transfer' && formToAccount && formAccount.value === formToAccount.value) {
+        const diffAcc = accounts.find(a => a.name !== formAccount.value);
+        if (diffAcc) formToAccount.value = diffAcc.name;
+      }
+      updateTransferPreview();
+    });
+
+    if (formToAccount) formToAccount.addEventListener('change', updateTransferPreview);
+    if (formAmount) formAmount.addEventListener('input', updateTransferPreview);
 
     // Supporto Autocategorizzazione Intelligente in Tempo Reale
     const descInput = document.getElementById('form-description');
@@ -16628,6 +17073,25 @@ class MovimentiView {
       });
     }
 
+    const periodFilter = document.getElementById('mov-period-filter');
+    if (periodFilter) {
+      periodFilter.addEventListener('change', (e) => {
+        this.filters.period = e.target.value;
+        this.render(container);
+      });
+    }
+
+    const applyCustomDatesBtn = document.getElementById('btn-apply-custom-dates');
+    if (applyCustomDatesBtn) {
+      applyCustomDatesBtn.addEventListener('click', () => {
+        const fromInput = document.getElementById('mov-custom-from');
+        const toInput = document.getElementById('mov-custom-to');
+        this.filters.customFrom = fromInput ? fromInput.value : '';
+        this.filters.customTo = toInput ? toInput.value : '';
+        this.render(container);
+      });
+    }
+
     const catFilter = document.getElementById('mov-category-filter');
     if (catFilter) {
       catFilter.addEventListener('change', (e) => {
@@ -16655,6 +17119,20 @@ class MovimentiView {
     const addBtn = document.getElementById('btn-add-tx');
     if (addBtn) addBtn.addEventListener('click', () => this.openModal());
 
+    // Apertura Dettaglio/Modifica al click sulla riga movimento (sia vista Apple che tabella)
+    container.querySelectorAll('.tx-interactive-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        // Se il click è sul pulsante elimina, non aprire il dettaglio
+        if (e.target.closest('.tx-del-btn') || e.target.closest('.mov-delete-btn')) {
+          return;
+        }
+        const txId = row.dataset.id;
+        if (txId) {
+          this.openDetailModal(txId, container);
+        }
+      });
+    });
+
     // Eliminazione transazioni sia da vista lista (.tx-del-btn) che da vista tabella (.mov-delete-btn)
     container.querySelectorAll('.tx-del-btn, .mov-delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -16666,33 +17144,245 @@ class MovimentiView {
     });
   }
 
-  openModal() {
+  openModal(txToEdit = null) {
     this.modalOpen = true;
+    this.editingTxId = txToEdit ? txToEdit.id : null;
     const overlay = document.getElementById('modal-overlay');
     const sheet = document.getElementById('modal-sheet');
+    const modalTitle = sheet ? sheet.querySelector('.modal-header h3') : null;
+    const saveBtn = document.getElementById('modal-save');
     const dateInput = document.getElementById('form-date');
-    
-    if (dateInput && !dateInput.value) {
-      dateInput.value = new Date().toISOString().split('T')[0];
+    const amountInput = document.getElementById('form-amount');
+    const descInput = document.getElementById('form-description');
+    const catSelect = document.getElementById('form-category');
+    const accSelect = document.getElementById('form-account');
+    const toAccSelect = document.getElementById('form-to-account');
+    const toAccGroup = document.getElementById('form-group-to-account');
+    const typeToggle = document.getElementById('form-type-toggle');
+    const predContainer = document.getElementById('smart-prediction-container');
+
+    if (modalTitle) {
+      modalTitle.textContent = txToEdit ? 'Modifica Movimento' : 'Nuovo Movimento';
+    }
+    if (saveBtn) {
+      saveBtn.textContent = txToEdit ? 'Aggiorna' : 'Salva';
+    }
+    if (predContainer) {
+      predContainer.style.display = 'none';
+    }
+
+    if (txToEdit) {
+      // Precompila campi con il movimento esistente
+      if (amountInput) amountInput.value = parseFloat(txToEdit.amount || 0).toFixed(2);
+      if (descInput) descInput.value = txToEdit.description || '';
+      
+      // Formatta la data per l'input date (YYYY-MM-DD)
+      if (dateInput) {
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(txToEdit.date)) {
+          const [d, m, y] = txToEdit.date.split('/');
+          dateInput.value = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(txToEdit.date)) {
+          dateInput.value = txToEdit.date;
+        } else {
+          dateInput.value = new Date().toISOString().split('T')[0];
+        }
+      }
+
+      if (catSelect) catSelect.value = txToEdit.category || '';
+      if (accSelect) accSelect.value = txToEdit.account || txToEdit.fromAccount || '';
+      if (toAccSelect) toAccSelect.value = txToEdit.toAccount || '';
+
+      if (typeToggle) {
+        typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.type === (txToEdit.type || 'expense'));
+        });
+      }
+      const isTransfer = txToEdit.type === 'transfer';
+      const catGroup = document.getElementById('form-group-category');
+      const accLabel = document.getElementById('form-account-label');
+      if (toAccGroup) {
+        toAccGroup.style.display = isTransfer ? 'block' : 'none';
+      }
+      if (catGroup) {
+        catGroup.style.display = isTransfer ? 'none' : 'block';
+      }
+      if (accLabel) {
+        accLabel.textContent = isTransfer ? 'Conto di Origine (Preleva da)' : (txToEdit.type === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+      }
+      if (typeof this._updateTransferPreview === 'function') {
+        this._updateTransferPreview();
+      }
+    } else {
+      // Reset campi per nuovo inserimento
+      if (amountInput) amountInput.value = '';
+      if (descInput) descInput.value = '';
+      if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+      if (catSelect) catSelect.value = '';
+      if (typeToggle) {
+        typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.type === 'expense');
+        });
+      }
+      const catGroup = document.getElementById('form-group-category');
+      const accLabel = document.getElementById('form-account-label');
+      const previewCard = document.getElementById('form-transfer-preview-card');
+      if (toAccGroup) toAccGroup.style.display = 'none';
+      if (catGroup) catGroup.style.display = 'block';
+      if (accLabel) accLabel.textContent = 'Conto di Addebito';
+      if (previewCard) previewCard.style.display = 'none';
     }
 
     if (overlay) overlay.classList.add('open');
     if (sheet) sheet.classList.add('open');
 
     setTimeout(() => {
-      const amountInput = document.getElementById('form-amount');
       if (amountInput) amountInput.focus();
     }, 280);
   }
 
   closeModal() {
     this.modalOpen = false;
+    this.editingTxId = null;
     const overlay = document.getElementById('modal-overlay');
     const sheet = document.getElementById('modal-sheet');
     if (sheet) sheet.classList.remove('open');
     setTimeout(() => {
       if (overlay) overlay.classList.remove('open');
     }, 260);
+  }
+
+  openDetailModal(txId, container) {
+    const tx = financeStore.getAllTransactions().find(t => t.id === txId);
+    if (!tx) return;
+
+    // Crea o recupera il container dell'ispettore dettaglio
+    let detailModal = document.getElementById('tx-detail-modal-root');
+    if (!detailModal) {
+      detailModal = document.createElement('div');
+      detailModal.id = 'tx-detail-modal-root';
+      document.body.appendChild(detailModal);
+    }
+
+    const isIncome = tx.type === 'income';
+    const isTransfer = tx.type === 'transfer';
+    const sign = isIncome ? '+' : (isTransfer ? '' : '-');
+    const amountColor = isIncome ? 'var(--apple-green)' : (isTransfer ? 'var(--apple-blue)' : 'var(--apple-red)');
+    const typeLabel = isIncome ? 'Entrata / Accredito' : (isTransfer ? 'Giroconto tra Conti' : 'Uscita / Spesa');
+    const catName = cleanCategoryName(tx.category || (isTransfer ? 'Giroconto' : 'Altro'));
+    const catIcon = getCategoryIcon(tx.category || (isTransfer ? 'giroconto' : 'altro'), 22);
+    const fullDate = this.formatDateFull(tx.date);
+
+    detailModal.innerHTML = `
+      <div class="apple-modal-overlay open" id="tx-detail-overlay">
+        <div class="apple-modal-sheet open" id="tx-detail-sheet" style="max-width: 480px;">
+          <div class="modal-handle"></div>
+          
+          <div class="modal-header" style="border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-3);">
+            <button class="modal-close-btn" id="tx-detail-close">Chiudi</button>
+            <h3 style="font-size: var(--text-base); font-weight: 700; margin: 0;">Scheda Movimento</h3>
+            <button class="apple-btn-secondary" id="tx-detail-edit-btn" style="height: 32px; padding: 0 12px; font-size: 13px; font-weight: 600;">
+              ${getIcon('edit', 13)} <span>Modifica</span>
+            </button>
+          </div>
+
+          <div class="modal-body" style="padding: var(--space-4) var(--space-2); display: flex; flex-direction: column; gap: var(--space-4);">
+            
+            <!-- Amount & Title Hero Box -->
+            <div style="text-align: center; padding: var(--space-3) var(--space-2); background: var(--bg-hover); border-radius: var(--radius-card); border: 1px solid var(--border-subtle);">
+              <div style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 9999px; background: rgba(0, 113, 227, 0.1); color: var(--apple-blue); margin-bottom: 8px;">
+                ${catIcon}
+              </div>
+              <h2 class="privacy-mask" style="font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: ${amountColor}; margin: 0; font-variant-numeric: tabular-nums;">
+                ${sign}${this.formatCurrency(tx.amount)}
+              </h2>
+              <p style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 6px 0 0 0;">
+                ${tx.description || 'Movimento'}
+              </p>
+              <span class="badge ${isIncome ? 'badge--positive' : (isTransfer ? 'badge--info' : 'badge--neutral')}" style="margin-top: 8px;">
+                ${typeLabel}
+              </span>
+            </div>
+
+            <!-- KV Details List -->
+            <div class="card" style="padding: var(--space-3) var(--space-4); margin: 0; background: var(--bg-card);">
+              <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Data di Registrazione</span>
+                <span class="kv__value" style="font-size: 13px; font-weight: 600;">${fullDate}</span>
+              </div>
+
+              <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Categoria</span>
+                <span class="kv__value" style="font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                  <span style="color: var(--apple-blue); display: inline-flex;">${getCategoryIcon(tx.category, 14)}</span>
+                  <span>${catName}</span>
+                </span>
+              </div>
+
+              <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">${isTransfer ? 'Conto Origine' : 'Conto di Addebito/Accredito'}</span>
+                <span class="kv__value" style="font-size: 13px; font-weight: 600;">${tx.account || tx.fromAccount || 'N/D'}</span>
+              </div>
+
+              ${isTransfer ? `
+                <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                  <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Conto Destinazione</span>
+                  <span class="kv__value" style="font-size: 13px; font-weight: 600;">${tx.toAccount || 'N/D'}</span>
+                </div>
+              ` : ''}
+
+              <div class="kv" style="padding: 10px 0;">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Identificativo Interno</span>
+                <span class="kv__value" style="font-size: 11px; font-family: monospace; color: var(--text-tertiary);">${tx.id}</span>
+              </div>
+            </div>
+
+            <!-- Danger Zone: Delete Action inside detail -->
+            <div style="display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-1);">
+              <button class="apple-btn-secondary" id="tx-detail-del-btn" style="color: var(--apple-red); border-color: rgba(255, 59, 48, 0.3); font-size: 13px;">
+                ${getIcon('trash', 14)} <span>Elimina Movimento</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    const closeDetail = () => {
+      const sheet = document.getElementById('tx-detail-sheet');
+      const ov = document.getElementById('tx-detail-overlay');
+      if (sheet) sheet.classList.remove('open');
+      setTimeout(() => {
+        if (ov) ov.classList.remove('open');
+        if (detailModal) detailModal.innerHTML = '';
+      }, 240);
+    };
+
+    const closeBtn = document.getElementById('tx-detail-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeDetail);
+
+    const overlay = document.getElementById('tx-detail-overlay');
+    if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDetail(); });
+
+    const editBtn = document.getElementById('tx-detail-edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => {
+        closeDetail();
+        setTimeout(() => {
+          this.openModal(tx);
+        }, 260);
+      });
+    }
+
+    const delBtn = document.getElementById('tx-detail-del-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        if (confirm(`Confermi l'eliminazione definitiva di questo movimento (${tx.description})?`)) {
+          closeDetail();
+          this.handleDelete(tx.id, tx.rowNumber, container);
+        }
+      });
+    }
   }
 
   handleSave(container) {
@@ -16724,23 +17414,56 @@ class MovimentiView {
       return;
     }
 
-    const addedTx = financeStore.addTransaction({
-      amount,
-      description,
-      date,
-      category: category || 'Giroconto',
-      type,
-      account,
-      toAccount: type === 'transfer' ? toAccount : ''
-    });
-
-    // Apprende l'associazione per future autocategorizzazioni
-    if (description && category && category !== '__custom__' && type !== 'transfer') {
-      smartCategorizer.learnAssociation(description, category);
+    if (type === 'transfer') {
+      if (!toAccount || account.trim().toLowerCase() === toAccount.trim().toLowerCase()) {
+        const toAccSelect = document.getElementById('form-to-account');
+        if (toAccSelect) {
+          toAccSelect.classList.add('shake');
+          setTimeout(() => toAccSelect.classList.remove('shake'), 400);
+        }
+        alert('Attenzione: Il conto di partenza e il conto di arrivo non possono coincidere. Seleziona due conti differenti per eseguire il giroconto.');
+        return;
+      }
     }
 
-    if (googleSheetsService.isConfigured()) {
-      googleSheetsService.pushTransaction(addedTx).catch(err => console.warn('Sync fallita:', err));
+    if (this.editingTxId) {
+      // Modalità Modifica Movimento Esistente
+      const updatedTx = financeStore.updateTransaction(this.editingTxId, {
+        amount,
+        description,
+        date,
+        category: category || 'Giroconto',
+        type,
+        account,
+        toAccount: type === 'transfer' ? toAccount : ''
+      });
+
+      if (description && category && category !== '__custom__' && type !== 'transfer') {
+        smartCategorizer.learnAssociation(description, category);
+      }
+
+      if (updatedTx && updatedTx.rowNumber && googleSheetsService.isConfigured()) {
+        googleSheetsService.updateTransaction(updatedTx.rowNumber, updatedTx).catch(err => console.warn('Update fallita:', err));
+      }
+    } else {
+      // Modalità Nuovo Movimento
+      const addedTx = financeStore.addTransaction({
+        amount,
+        description,
+        date,
+        category: category || 'Giroconto',
+        type,
+        account,
+        toAccount: type === 'transfer' ? toAccount : ''
+      });
+
+      if (description && category && category !== '__custom__' && type !== 'transfer') {
+        smartCategorizer.learnAssociation(description, category);
+      }
+
+      if (googleSheetsService.isConfigured()) {
+        googleSheetsService.pushTransaction(addedTx).catch(err => console.warn('Sync fallita:', err));
+      }
     }
 
     this.closeModal();
@@ -19757,6 +20480,10 @@ class ImpostazioniView {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                 <span>Verifica Connessione</span>
               </button>
+              <button class="apple-btn-secondary" id="btn-force-sync-now" style="color: var(--apple-blue); border-color: rgba(0, 113, 227, 0.3);">
+                ${getIcon('sync', 14)}
+                <span>Sincronizza Ora dal Foglio</span>
+              </button>
               <button class="apple-btn-primary" id="btn-save-sheets-config">
                 <span>Salva Impostazioni</span>
               </button>
@@ -20144,6 +20871,45 @@ class ImpostazioniView {
         feedbackEl.textContent = res.message;
       });
     }
+
+    const btnForceSync = document.getElementById('btn-force-sync-now');
+    if (btnForceSync) {
+      btnForceSync.addEventListener('click', async () => {
+        const feedbackEl = document.getElementById('connection-test-feedback');
+        if (feedbackEl) {
+          feedbackEl.style.display = 'block';
+          feedbackEl.className = 'connection-feedback loading';
+          feedbackEl.textContent = 'Scaricamento e allineamento dati da Google Sheets in corso...';
+        }
+
+        try {
+          const data = await googleSheetsService.fetchAllData();
+          if (data && data.transactions) {
+            financeStore.setTransactions(data.transactions);
+            if (data.saldi) {
+              data.saldi.forEach(s => {
+                financeStore.updateAccountBalance(s.name, s.balance);
+              });
+            }
+            if (feedbackEl) {
+              feedbackEl.className = 'connection-feedback success';
+              feedbackEl.textContent = `Sincronizzazione completata con successo! ${data.transactions.length} movimenti e saldi allineati.`;
+            }
+            setTimeout(() => this.render(container), 800);
+          } else {
+            if (feedbackEl) {
+              feedbackEl.className = 'connection-feedback error';
+              feedbackEl.textContent = 'Nessun dato ricevuto da Google Sheets o configurazione non valida.';
+            }
+          }
+        } catch (err) {
+          if (feedbackEl) {
+            feedbackEl.className = 'connection-feedback error';
+            feedbackEl.textContent = 'Errore durante la sincronizzazione: ' + (err.message || err);
+          }
+        }
+      });
+    }
   }
 }
 
@@ -20339,6 +21105,19 @@ class AppController {
 
     const mPrivacyBtn = document.getElementById('mobile-privacy-toggle-btn');
     if (mPrivacyBtn) mPrivacyBtn.addEventListener('click', togglePrivacy);
+
+    // Ascolto aggiornamenti saldi conti in tempo reale per re-render reattivo
+    window.addEventListener('finanze:accounts-updated', () => {
+      const container = document.getElementById('main-viewport');
+      if (!container) return;
+      if (this.currentTab === 'dashboard') {
+        this.dashboardView.render(container);
+      } else if (this.currentTab === 'impostazioni') {
+        this.impostazioniView.render(container);
+      } else if (this.currentTab === 'investimenti') {
+        this.investimentiView.render(container);
+      }
+    });
 
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(btn => {
       btn.addEventListener('click', (e) => {

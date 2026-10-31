@@ -86,7 +86,9 @@ Questo file è la tua **costituzione operativa**: leggilo all'avvio di ogni sess
    - Gestione robusta delle eccezioni con feedback visivo nativo e non invasivo in stile Apple.
 4. **Collaudo Responsivo**:
    - Verifica sempre l'esperienza d'uso su entrambe le visuali chiave: MacBook (schermo ampio con sidebar) e iPhone (schermo ridotto con safe-area).
-5. **Aggiornamento Obbligatorio di `PROJECT_LOG.md` (Single Source of Truth)**:
+5. **Economia dei Token & Attivazione Preventiva delle Skill**:
+   - Prima di avviare skill complesse, subagenti o script di audit/ispezione ad alto consumo di token, **chiedi sempre conferma preventiva a Giorgio**, spiegando brevemente quale operazione intendi svolgere e l'obiettivo.
+6. **Aggiornamento Obbligatorio di `PROJECT_LOG.md` (Single Source of Truth)**:
    - **Regola inderogabile**: ogni modifica, nuova feature o refactoring completato deve essere registrato in `PROJECT_LOG.md`, aggiornando la tabella dei moduli e il registro cronologico R&D.
 
 ---

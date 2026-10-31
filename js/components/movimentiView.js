@@ -27,9 +27,13 @@ export class MovimentiView {
       type: 'all',       // 'all' | 'income' | 'expense' | 'transfer'
       category: 'all',
       account: 'all',
-      sortBy: 'date-desc'
+      sortBy: 'date-desc',
+      period: 'all',     // 'all' | 'current_month' | 'last_30_days' | 'last_3_months' | 'last_6_months' | 'current_year' | 'custom'
+      customFrom: '',
+      customTo: ''
     };
     this.modalOpen = false;
+    this.editingTxId = null; // null = nuovo movimento, string = id movimento in modifica
   }
 
   formatCurrency(value) {
@@ -62,6 +66,63 @@ export class MovimentiView {
       return dateStr.replace(/-/g, '');
     }
     return dateStr;
+  }
+
+  parseDateObject(dateStr) {
+    if (!dateStr) return null;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split('/');
+      return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-');
+      return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    }
+    return null;
+  }
+
+  filterByPeriod(txs, period, customFrom, customTo) {
+    const refDate = new Date(2026, 9, 31, 23, 59, 59); // 31 Ottobre 2026
+
+    return txs.filter(t => {
+      const d = this.parseDateObject(t.date);
+      if (!d) return true;
+
+      switch (period) {
+        case 'current_month':
+          return d.getFullYear() === refDate.getFullYear() && d.getMonth() === refDate.getMonth();
+        case 'last_30_days': {
+          const past30 = new Date(refDate);
+          past30.setDate(past30.getDate() - 30);
+          return d >= past30 && d <= refDate;
+        }
+        case 'last_3_months': {
+          const past90 = new Date(refDate);
+          past90.setMonth(past90.getMonth() - 3);
+          return d >= past90 && d <= refDate;
+        }
+        case 'last_6_months': {
+          const past180 = new Date(refDate);
+          past180.setMonth(past180.getMonth() - 6);
+          return d >= past180 && d <= refDate;
+        }
+        case 'current_year':
+          return d.getFullYear() === refDate.getFullYear();
+        case 'custom': {
+          if (customFrom) {
+            const fromD = new Date(customFrom + 'T00:00:00');
+            if (d < fromD) return false;
+          }
+          if (customTo) {
+            const toD = new Date(customTo + 'T23:59:59');
+            if (d > toD) return false;
+          }
+          return true;
+        }
+        default:
+          return true;
+      }
+    });
   }
 
   formatDateParts(dateStr) {
@@ -195,6 +256,11 @@ export class MovimentiView {
         (t.fromAccount && t.fromAccount.toLowerCase().includes(acc)) ||
         (t.toAccount && t.toAccount.toLowerCase().includes(acc))
       );
+    }
+
+    // Filtro per periodo di riferimento
+    if (this.filters.period && this.filters.period !== 'all') {
+      txs = this.filterByPeriod(txs, this.filters.period, this.filters.customFrom, this.filters.customTo);
     }
 
     switch (this.filters.sortBy) {
@@ -530,8 +596,21 @@ export class MovimentiView {
           </div>
         </div>
 
-        <!-- Filter Dropdowns Row: Category, Account, Sort -->
+        <!-- Filter Dropdowns Row: Period, Category, Account, Sort -->
         <div class="mov-controls-filters">
+          <div class="apple-select-wrapper">
+            <select id="mov-period-filter" class="apple-select">
+              <option value="all" ${this.filters.period === 'all' ? 'selected' : ''}>Tutto lo Storico</option>
+              <option value="current_month" ${this.filters.period === 'current_month' ? 'selected' : ''}>Mese Corrente (Ott 2026)</option>
+              <option value="last_30_days" ${this.filters.period === 'last_30_days' ? 'selected' : ''}>Ultimi 30 Giorni</option>
+              <option value="last_3_months" ${this.filters.period === 'last_3_months' ? 'selected' : ''}>Ultimi 3 Mesi</option>
+              <option value="last_6_months" ${this.filters.period === 'last_6_months' ? 'selected' : ''}>Ultimi 6 Mesi</option>
+              <option value="current_year" ${this.filters.period === 'current_year' ? 'selected' : ''}>Anno 2026</option>
+              <option value="custom" ${this.filters.period === 'custom' ? 'selected' : ''}>Intervallo Personalizzato...</option>
+            </select>
+            <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+
           <div class="apple-select-wrapper">
             <select id="mov-category-filter" class="apple-select">
               <option value="all" ${this.filters.category === 'all' ? 'selected' : ''}>Tutte le Categorie</option>
@@ -562,6 +641,23 @@ export class MovimentiView {
             ${stats.count} movimenti
           </span>
         </div>
+
+        <!-- Custom Date Range Bar (Conditional) -->
+        ${this.filters.period === 'custom' ? `
+          <div class="mov-custom-date-row" style="display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label class="form-label" style="margin: 0; font-size: 12px; font-weight: 600;">Dal:</label>
+              <input type="date" id="mov-custom-from" class="apple-input" style="padding: 4px 10px; font-size: 13px; height: 32px;" value="${this.filters.customFrom || ''}" />
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label class="form-label" style="margin: 0; font-size: 12px; font-weight: 600;">Al:</label>
+              <input type="date" id="mov-custom-to" class="apple-input" style="padding: 4px 10px; font-size: 13px; height: 32px;" value="${this.filters.customTo || ''}" />
+            </div>
+            <button class="apple-btn-secondary" id="btn-apply-custom-dates" style="height: 32px; padding: 0 12px; font-size: 12px;">
+              Applica Filtro Date
+            </button>
+          </div>
+        ` : ''}
       </section>
 
       <!-- Main Transactions Content: Grouped List or Data Table -->
@@ -642,7 +738,7 @@ export class MovimentiView {
       : (tx.account || 'Buddybank');
 
     return `
-      <div class="tx-apple-row" data-id="${tx.id}">
+      <div class="tx-apple-row tx-interactive-row" data-id="${tx.id}" style="cursor: pointer;" title="Clicca per visualizzare dettagli e modificare">
         <div class="tx-avatar ${avatarClass}">
           ${catIcon}
         </div>
@@ -683,7 +779,7 @@ export class MovimentiView {
       : (tx.account || 'Buddybank');
 
     return `
-      <div class="mov-table-row" data-id="${tx.id}">
+      <div class="mov-table-row tx-interactive-row" data-id="${tx.id}" style="cursor: pointer;" title="Clicca per visualizzare dettagli e modificare">
         <div class="mov-col mov-col-date">
           <span>${day}</span>
           <span class="date-sub">${monthYear}</span>
@@ -1475,13 +1571,24 @@ export class MovimentiView {
             </div>
 
             <div class="form-group" id="form-group-to-account" style="display: none;">
-              <label class="form-label" for="form-to-account">Conto di Accredito (Destinazione)</label>
+              <label class="form-label" for="form-to-account" id="form-to-account-label">Conto di Accredito (Destinazione)</label>
               <div class="apple-select-wrapper form-select-wrapper">
                 <select id="form-to-account" class="apple-select apple-input">
                   ${accounts.map(a => `<option value="${a.name}">${a.name} ${financeStore.isPrivacyMode() ? '' : `(${this.formatCurrency(a.balance)})`}</option>`).join('')}
                 </select>
                 <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
+            </div>
+
+            <!-- Apple Live Transfer Preview Card -->
+            <div id="form-transfer-preview-card" style="display: none; margin-top: var(--space-box-gap-xs); padding: 12px 14px; border-radius: 14px; background: rgba(0, 113, 227, 0.06); border: 1px solid rgba(0, 113, 227, 0.16); transition: all 0.2s ease;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--apple-blue); display: flex; align-items: center; gap: 6px;">
+                  ${getIcon('giroconto', 14)} Impatto Saldi in Tempo Reale
+                </span>
+                <span id="transfer-preview-status-badge" class="badge badge--info" style="font-size: 10px;">Giroconto</span>
+              </div>
+              <div id="transfer-preview-content" style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;"></div>
             </div>
 
           </form>
@@ -1500,7 +1607,85 @@ export class MovimentiView {
 
     const typeToggle = document.getElementById('form-type-toggle');
     const toAccGroup = document.getElementById('form-group-to-account');
+    const catGroup = document.getElementById('form-group-category');
     const accLabel = document.getElementById('form-account-label');
+    const formAccount = document.getElementById('form-account');
+    const formToAccount = document.getElementById('form-to-account');
+    const formAmount = document.getElementById('form-amount');
+
+    const updateTransferPreview = () => {
+      const activeBtn = typeToggle?.querySelector('.segment-btn.active');
+      const isTransfer = activeBtn?.dataset.type === 'transfer';
+      const previewCard = document.getElementById('form-transfer-preview-card');
+      const previewContent = document.getElementById('transfer-preview-content');
+      const previewBadge = document.getElementById('transfer-preview-status-badge');
+
+      if (!isTransfer || !previewCard || !previewContent) {
+        if (previewCard) previewCard.style.display = 'none';
+        return;
+      }
+
+      previewCard.style.display = 'block';
+      const fromName = formAccount?.value || '';
+      const toName = formToAccount?.value || '';
+      const amt = parseFloat(formAmount?.value || 0);
+
+      const fromAcc = financeStore.findAccount(fromName);
+      const toAcc = financeStore.findAccount(toName);
+
+      if (!fromAcc || !toAcc || fromAcc.name === toAcc.name) {
+        if (previewBadge) {
+          previewBadge.className = 'badge badge--negative';
+          previewBadge.textContent = 'Errore';
+        }
+        previewCard.style.background = 'rgba(255, 59, 48, 0.08)';
+        previewCard.style.borderColor = 'rgba(255, 59, 48, 0.28)';
+        previewContent.innerHTML = `
+          <div style="color: var(--apple-red); font-weight: 600; font-size: 11.5px; display: flex; align-items: center; gap: 6px; padding: 2px 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>Il conto di partenza e di arrivo non possono coincidere. Seleziona due conti distinti.</span>
+          </div>
+        `;
+        return;
+      }
+
+      previewCard.style.background = 'rgba(0, 113, 227, 0.06)';
+      previewCard.style.borderColor = 'rgba(0, 113, 227, 0.16)';
+      if (previewBadge) {
+        previewBadge.className = 'badge badge--info';
+        previewBadge.textContent = amt > 0 ? 'Valido' : 'Inserisci Importo';
+      }
+
+      const fromOld = parseFloat(fromAcc.balance) || 0;
+      const fromNew = Math.round((fromOld - amt) * 100) / 100;
+      const toOld = parseFloat(toAcc.balance) || 0;
+      const toNew = Math.round((toOld + amt) * 100) / 100;
+
+      previewContent.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 0;">
+          <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px;">
+            <span style="color: var(--apple-red); font-weight: 600;">📤 Origine:</span> <strong>${fromAcc.name}</strong>
+          </span>
+          <span style="font-variant-numeric: tabular-nums;">
+            ${this.formatCurrency(fromOld)} ➔ <strong style="color: var(--apple-red);">${this.formatCurrency(fromNew)}</strong>
+          </span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-top: 1px dashed var(--border-subtle);">
+          <span style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px;">
+            <span style="color: var(--apple-green); font-weight: 600;">📥 Destinazione:</span> <strong>${toAcc.name}</strong>
+          </span>
+          <span style="font-variant-numeric: tabular-nums;">
+            ${this.formatCurrency(toOld)} ➔ <strong style="color: var(--apple-green);">${this.formatCurrency(toNew)}</strong>
+          </span>
+        </div>
+        <div style="margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--border-subtle); font-size: 11px; color: var(--text-tertiary); display: flex; justify-content: space-between;">
+          <span>Variazione Net Worth complessivo:</span>
+          <strong style="color: var(--text-secondary);">± 0,00 € (Trasferimento interno)</strong>
+        </div>
+      `;
+    };
+
+    this._updateTransferPreview = updateTransferPreview;
 
     if (typeToggle) {
       typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
@@ -1512,12 +1697,37 @@ export class MovimentiView {
           if (toAccGroup) {
             toAccGroup.style.display = currentType === 'transfer' ? 'block' : 'none';
           }
-          if (accLabel) {
-            accLabel.textContent = currentType === 'transfer' ? 'Conto Origine' : (currentType === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+          if (catGroup) {
+            catGroup.style.display = currentType === 'transfer' ? 'none' : 'block';
           }
+          if (accLabel) {
+            accLabel.textContent = currentType === 'transfer' ? 'Conto di Origine (Preleva da)' : (currentType === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+          }
+
+          // Se è giroconto e il conto di destinazione coincide con l'origine, auto-seleziona il successivo
+          if (currentType === 'transfer' && formAccount && formToAccount) {
+            if (formAccount.value === formToAccount.value) {
+              const diffAcc = accounts.find(a => a.name !== formAccount.value);
+              if (diffAcc) formToAccount.value = diffAcc.name;
+            }
+          }
+
+          updateTransferPreview();
         });
       });
     }
+
+    if (formAccount) formAccount.addEventListener('change', () => {
+      const activeBtn = typeToggle?.querySelector('.segment-btn.active');
+      if (activeBtn?.dataset.type === 'transfer' && formToAccount && formAccount.value === formToAccount.value) {
+        const diffAcc = accounts.find(a => a.name !== formAccount.value);
+        if (diffAcc) formToAccount.value = diffAcc.name;
+      }
+      updateTransferPreview();
+    });
+
+    if (formToAccount) formToAccount.addEventListener('change', updateTransferPreview);
+    if (formAmount) formAmount.addEventListener('input', updateTransferPreview);
 
     // Supporto Autocategorizzazione Intelligente in Tempo Reale
     const descInput = document.getElementById('form-description');
@@ -1651,6 +1861,25 @@ export class MovimentiView {
       });
     }
 
+    const periodFilter = document.getElementById('mov-period-filter');
+    if (periodFilter) {
+      periodFilter.addEventListener('change', (e) => {
+        this.filters.period = e.target.value;
+        this.render(container);
+      });
+    }
+
+    const applyCustomDatesBtn = document.getElementById('btn-apply-custom-dates');
+    if (applyCustomDatesBtn) {
+      applyCustomDatesBtn.addEventListener('click', () => {
+        const fromInput = document.getElementById('mov-custom-from');
+        const toInput = document.getElementById('mov-custom-to');
+        this.filters.customFrom = fromInput ? fromInput.value : '';
+        this.filters.customTo = toInput ? toInput.value : '';
+        this.render(container);
+      });
+    }
+
     const catFilter = document.getElementById('mov-category-filter');
     if (catFilter) {
       catFilter.addEventListener('change', (e) => {
@@ -1678,6 +1907,20 @@ export class MovimentiView {
     const addBtn = document.getElementById('btn-add-tx');
     if (addBtn) addBtn.addEventListener('click', () => this.openModal());
 
+    // Apertura Dettaglio/Modifica al click sulla riga movimento (sia vista Apple che tabella)
+    container.querySelectorAll('.tx-interactive-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        // Se il click è sul pulsante elimina, non aprire il dettaglio
+        if (e.target.closest('.tx-del-btn') || e.target.closest('.mov-delete-btn')) {
+          return;
+        }
+        const txId = row.dataset.id;
+        if (txId) {
+          this.openDetailModal(txId, container);
+        }
+      });
+    });
+
     // Eliminazione transazioni sia da vista lista (.tx-del-btn) che da vista tabella (.mov-delete-btn)
     container.querySelectorAll('.tx-del-btn, .mov-delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1689,33 +1932,245 @@ export class MovimentiView {
     });
   }
 
-  openModal() {
+  openModal(txToEdit = null) {
     this.modalOpen = true;
+    this.editingTxId = txToEdit ? txToEdit.id : null;
     const overlay = document.getElementById('modal-overlay');
     const sheet = document.getElementById('modal-sheet');
+    const modalTitle = sheet ? sheet.querySelector('.modal-header h3') : null;
+    const saveBtn = document.getElementById('modal-save');
     const dateInput = document.getElementById('form-date');
-    
-    if (dateInput && !dateInput.value) {
-      dateInput.value = new Date().toISOString().split('T')[0];
+    const amountInput = document.getElementById('form-amount');
+    const descInput = document.getElementById('form-description');
+    const catSelect = document.getElementById('form-category');
+    const accSelect = document.getElementById('form-account');
+    const toAccSelect = document.getElementById('form-to-account');
+    const toAccGroup = document.getElementById('form-group-to-account');
+    const typeToggle = document.getElementById('form-type-toggle');
+    const predContainer = document.getElementById('smart-prediction-container');
+
+    if (modalTitle) {
+      modalTitle.textContent = txToEdit ? 'Modifica Movimento' : 'Nuovo Movimento';
+    }
+    if (saveBtn) {
+      saveBtn.textContent = txToEdit ? 'Aggiorna' : 'Salva';
+    }
+    if (predContainer) {
+      predContainer.style.display = 'none';
+    }
+
+    if (txToEdit) {
+      // Precompila campi con il movimento esistente
+      if (amountInput) amountInput.value = parseFloat(txToEdit.amount || 0).toFixed(2);
+      if (descInput) descInput.value = txToEdit.description || '';
+      
+      // Formatta la data per l'input date (YYYY-MM-DD)
+      if (dateInput) {
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(txToEdit.date)) {
+          const [d, m, y] = txToEdit.date.split('/');
+          dateInput.value = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(txToEdit.date)) {
+          dateInput.value = txToEdit.date;
+        } else {
+          dateInput.value = new Date().toISOString().split('T')[0];
+        }
+      }
+
+      if (catSelect) catSelect.value = txToEdit.category || '';
+      if (accSelect) accSelect.value = txToEdit.account || txToEdit.fromAccount || '';
+      if (toAccSelect) toAccSelect.value = txToEdit.toAccount || '';
+
+      if (typeToggle) {
+        typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.type === (txToEdit.type || 'expense'));
+        });
+      }
+      const isTransfer = txToEdit.type === 'transfer';
+      const catGroup = document.getElementById('form-group-category');
+      const accLabel = document.getElementById('form-account-label');
+      if (toAccGroup) {
+        toAccGroup.style.display = isTransfer ? 'block' : 'none';
+      }
+      if (catGroup) {
+        catGroup.style.display = isTransfer ? 'none' : 'block';
+      }
+      if (accLabel) {
+        accLabel.textContent = isTransfer ? 'Conto di Origine (Preleva da)' : (txToEdit.type === 'income' ? 'Conto Accredito' : 'Conto Addebito');
+      }
+      if (typeof this._updateTransferPreview === 'function') {
+        this._updateTransferPreview();
+      }
+    } else {
+      // Reset campi per nuovo inserimento
+      if (amountInput) amountInput.value = '';
+      if (descInput) descInput.value = '';
+      if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+      if (catSelect) catSelect.value = '';
+      if (typeToggle) {
+        typeToggle.querySelectorAll('.segment-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.type === 'expense');
+        });
+      }
+      const catGroup = document.getElementById('form-group-category');
+      const accLabel = document.getElementById('form-account-label');
+      const previewCard = document.getElementById('form-transfer-preview-card');
+      if (toAccGroup) toAccGroup.style.display = 'none';
+      if (catGroup) catGroup.style.display = 'block';
+      if (accLabel) accLabel.textContent = 'Conto di Addebito';
+      if (previewCard) previewCard.style.display = 'none';
     }
 
     if (overlay) overlay.classList.add('open');
     if (sheet) sheet.classList.add('open');
 
     setTimeout(() => {
-      const amountInput = document.getElementById('form-amount');
       if (amountInput) amountInput.focus();
     }, 280);
   }
 
   closeModal() {
     this.modalOpen = false;
+    this.editingTxId = null;
     const overlay = document.getElementById('modal-overlay');
     const sheet = document.getElementById('modal-sheet');
     if (sheet) sheet.classList.remove('open');
     setTimeout(() => {
       if (overlay) overlay.classList.remove('open');
     }, 260);
+  }
+
+  openDetailModal(txId, container) {
+    const tx = financeStore.getAllTransactions().find(t => t.id === txId);
+    if (!tx) return;
+
+    // Crea o recupera il container dell'ispettore dettaglio
+    let detailModal = document.getElementById('tx-detail-modal-root');
+    if (!detailModal) {
+      detailModal = document.createElement('div');
+      detailModal.id = 'tx-detail-modal-root';
+      document.body.appendChild(detailModal);
+    }
+
+    const isIncome = tx.type === 'income';
+    const isTransfer = tx.type === 'transfer';
+    const sign = isIncome ? '+' : (isTransfer ? '' : '-');
+    const amountColor = isIncome ? 'var(--apple-green)' : (isTransfer ? 'var(--apple-blue)' : 'var(--apple-red)');
+    const typeLabel = isIncome ? 'Entrata / Accredito' : (isTransfer ? 'Giroconto tra Conti' : 'Uscita / Spesa');
+    const catName = cleanCategoryName(tx.category || (isTransfer ? 'Giroconto' : 'Altro'));
+    const catIcon = getCategoryIcon(tx.category || (isTransfer ? 'giroconto' : 'altro'), 22);
+    const fullDate = this.formatDateFull(tx.date);
+
+    detailModal.innerHTML = `
+      <div class="apple-modal-overlay open" id="tx-detail-overlay">
+        <div class="apple-modal-sheet open" id="tx-detail-sheet" style="max-width: 480px;">
+          <div class="modal-handle"></div>
+          
+          <div class="modal-header" style="border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-3);">
+            <button class="modal-close-btn" id="tx-detail-close">Chiudi</button>
+            <h3 style="font-size: var(--text-base); font-weight: 700; margin: 0;">Scheda Movimento</h3>
+            <button class="apple-btn-secondary" id="tx-detail-edit-btn" style="height: 32px; padding: 0 12px; font-size: 13px; font-weight: 600;">
+              ${getIcon('edit', 13)} <span>Modifica</span>
+            </button>
+          </div>
+
+          <div class="modal-body" style="padding: var(--space-4) var(--space-2); display: flex; flex-direction: column; gap: var(--space-4);">
+            
+            <!-- Amount & Title Hero Box -->
+            <div style="text-align: center; padding: var(--space-3) var(--space-2); background: var(--bg-hover); border-radius: var(--radius-card); border: 1px solid var(--border-subtle);">
+              <div style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 9999px; background: rgba(0, 113, 227, 0.1); color: var(--apple-blue); margin-bottom: 8px;">
+                ${catIcon}
+              </div>
+              <h2 class="privacy-mask" style="font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: ${amountColor}; margin: 0; font-variant-numeric: tabular-nums;">
+                ${sign}${this.formatCurrency(tx.amount)}
+              </h2>
+              <p style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 6px 0 0 0;">
+                ${tx.description || 'Movimento'}
+              </p>
+              <span class="badge ${isIncome ? 'badge--positive' : (isTransfer ? 'badge--info' : 'badge--neutral')}" style="margin-top: 8px;">
+                ${typeLabel}
+              </span>
+            </div>
+
+            <!-- KV Details List -->
+            <div class="card" style="padding: var(--space-3) var(--space-4); margin: 0; background: var(--bg-card);">
+              <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Data di Registrazione</span>
+                <span class="kv__value" style="font-size: 13px; font-weight: 600;">${fullDate}</span>
+              </div>
+
+              <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Categoria</span>
+                <span class="kv__value" style="font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                  <span style="color: var(--apple-blue); display: inline-flex;">${getCategoryIcon(tx.category, 14)}</span>
+                  <span>${catName}</span>
+                </span>
+              </div>
+
+              <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">${isTransfer ? 'Conto Origine' : 'Conto di Addebito/Accredito'}</span>
+                <span class="kv__value" style="font-size: 13px; font-weight: 600;">${tx.account || tx.fromAccount || 'N/D'}</span>
+              </div>
+
+              ${isTransfer ? `
+                <div class="kv" style="padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                  <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Conto Destinazione</span>
+                  <span class="kv__value" style="font-size: 13px; font-weight: 600;">${tx.toAccount || 'N/D'}</span>
+                </div>
+              ` : ''}
+
+              <div class="kv" style="padding: 10px 0;">
+                <span class="kv__label" style="font-size: 13px; color: var(--text-secondary);">Identificativo Interno</span>
+                <span class="kv__value" style="font-size: 11px; font-family: monospace; color: var(--text-tertiary);">${tx.id}</span>
+              </div>
+            </div>
+
+            <!-- Danger Zone: Delete Action inside detail -->
+            <div style="display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-1);">
+              <button class="apple-btn-secondary" id="tx-detail-del-btn" style="color: var(--apple-red); border-color: rgba(255, 59, 48, 0.3); font-size: 13px;">
+                ${getIcon('trash', 14)} <span>Elimina Movimento</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    const closeDetail = () => {
+      const sheet = document.getElementById('tx-detail-sheet');
+      const ov = document.getElementById('tx-detail-overlay');
+      if (sheet) sheet.classList.remove('open');
+      setTimeout(() => {
+        if (ov) ov.classList.remove('open');
+        if (detailModal) detailModal.innerHTML = '';
+      }, 240);
+    };
+
+    const closeBtn = document.getElementById('tx-detail-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeDetail);
+
+    const overlay = document.getElementById('tx-detail-overlay');
+    if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDetail(); });
+
+    const editBtn = document.getElementById('tx-detail-edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => {
+        closeDetail();
+        setTimeout(() => {
+          this.openModal(tx);
+        }, 260);
+      });
+    }
+
+    const delBtn = document.getElementById('tx-detail-del-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        if (confirm(`Confermi l'eliminazione definitiva di questo movimento (${tx.description})?`)) {
+          closeDetail();
+          this.handleDelete(tx.id, tx.rowNumber, container);
+        }
+      });
+    }
   }
 
   handleSave(container) {
@@ -1747,23 +2202,56 @@ export class MovimentiView {
       return;
     }
 
-    const addedTx = financeStore.addTransaction({
-      amount,
-      description,
-      date,
-      category: category || 'Giroconto',
-      type,
-      account,
-      toAccount: type === 'transfer' ? toAccount : ''
-    });
-
-    // Apprende l'associazione per future autocategorizzazioni
-    if (description && category && category !== '__custom__' && type !== 'transfer') {
-      smartCategorizer.learnAssociation(description, category);
+    if (type === 'transfer') {
+      if (!toAccount || account.trim().toLowerCase() === toAccount.trim().toLowerCase()) {
+        const toAccSelect = document.getElementById('form-to-account');
+        if (toAccSelect) {
+          toAccSelect.classList.add('shake');
+          setTimeout(() => toAccSelect.classList.remove('shake'), 400);
+        }
+        alert('Attenzione: Il conto di partenza e il conto di arrivo non possono coincidere. Seleziona due conti differenti per eseguire il giroconto.');
+        return;
+      }
     }
 
-    if (googleSheetsService.isConfigured()) {
-      googleSheetsService.pushTransaction(addedTx).catch(err => console.warn('Sync fallita:', err));
+    if (this.editingTxId) {
+      // Modalità Modifica Movimento Esistente
+      const updatedTx = financeStore.updateTransaction(this.editingTxId, {
+        amount,
+        description,
+        date,
+        category: category || 'Giroconto',
+        type,
+        account,
+        toAccount: type === 'transfer' ? toAccount : ''
+      });
+
+      if (description && category && category !== '__custom__' && type !== 'transfer') {
+        smartCategorizer.learnAssociation(description, category);
+      }
+
+      if (updatedTx && updatedTx.rowNumber && googleSheetsService.isConfigured()) {
+        googleSheetsService.updateTransaction(updatedTx.rowNumber, updatedTx).catch(err => console.warn('Update fallita:', err));
+      }
+    } else {
+      // Modalità Nuovo Movimento
+      const addedTx = financeStore.addTransaction({
+        amount,
+        description,
+        date,
+        category: category || 'Giroconto',
+        type,
+        account,
+        toAccount: type === 'transfer' ? toAccount : ''
+      });
+
+      if (description && category && category !== '__custom__' && type !== 'transfer') {
+        smartCategorizer.learnAssociation(description, category);
+      }
+
+      if (googleSheetsService.isConfigured()) {
+        googleSheetsService.pushTransaction(addedTx).catch(err => console.warn('Sync fallita:', err));
+      }
     }
 
     this.closeModal();
