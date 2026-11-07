@@ -5534,7 +5534,7 @@ class GoogleSheetsService {
         };
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 8500);
 
         const response = await fetch(this.webAppUrl, {
           method: 'POST',
@@ -5709,7 +5709,7 @@ class GoogleSheetsService {
     }
   }
 
-  async fetchAllData() {
+  async fetchAllData(forceRefresh = false) {
     if (!this.isConfigured()) return null;
 
     try {
@@ -5720,6 +5720,9 @@ class GoogleSheetsService {
       targetUrl.searchParams.set('action', 'getAllData');
       if (this.securityToken) {
         targetUrl.searchParams.set('token', this.securityToken);
+      }
+      if (forceRefresh) {
+        targetUrl.searchParams.set('force', '1');
       }
 
       const controller = new AbortController();
@@ -5774,7 +5777,7 @@ class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -5826,7 +5829,7 @@ class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -5877,7 +5880,7 @@ class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -5923,7 +5926,7 @@ class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -16048,7 +16051,7 @@ class ImpostazioniView {
     }
 
     try {
-      const data = await googleSheetsService.fetchAllData();
+      const data = await googleSheetsService.fetchAllData(true);
       if (data) {
         financeStore.syncCloudData(data);
         const accCount = financeStore.getAccounts().length;
@@ -16815,7 +16818,7 @@ class AppController {
         }
 
         try {
-          const cloudData = await googleSheetsService.fetchAllData();
+          const cloudData = await googleSheetsService.fetchAllData(true);
           if (iconSpin) iconSpin.style.animation = '';
           if (cloudData) {
             this.applyCloudData(cloudData);

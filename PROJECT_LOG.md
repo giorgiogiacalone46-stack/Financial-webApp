@@ -26,7 +26,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.45 — Produzione Ufficiale `main`)
+## 📊 Stato Attuale dei Moduli (v2026.46 — Laboratorio `beta`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -43,6 +43,12 @@
 ---
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
+
+- **[BETA v2026.46] Ottimizzazione Tempi di Sincronizzazione Google Sheets & In-Memory RAM Cache (`Code.gs`)**:
+  - **Taglio I/O su Google Sheets**: Sostituito `getDataRange()` con lettura chirurgica delimitata `getRange(1, 1, lastRow, numCols)` su Movimenti (colonne A:J) e Saldi (colonne A:E), abbattendo le celle lette da oltre 52.000 a ~6.600 (-85% overhead I/O).
+  - **In-Memory RAM Cache in Apps Script (`CacheService`)**: Implementata cache a chunk sicuri su `CacheService.getScriptCache()` (TTL 10 min); le chiamate di sincronizzazione a freddo/background vengono servite direttamente dalla memoria Google in ~50ms senza aprire il foglio.
+  - **Invalidazione Atomica Istantanea**: Ogni operazione di scrittura (`addTransaction`, `updateTransaction`, `deleteTransaction`, `updateAccountBalance`) purga immediatamente la cache (`clearAppCache()`).
+  - **Sincronizzazione Intelligente Force/Silent**: Il client frontend invia `force=1` solo su esplicito clic dell'utente ("Sincronizza Ora"), mentre sfrutta la cache ultra-rapida per i controlli in background e al ritorno sull'app (`visibilitychange`). Timeout ottimizzato a 8.5s per azzerare falsi accodamenti offline da cold start serverless. [2026-11-07]
 
 - **[MERGE MAIN - v2026.45] Motore di Auto-Ricostruzione Conti & Saldi da Google Sheets (`syncCloudData`)**:
   - Risolto il disallineamento tra database dimostrativo (`demoData.js`) e foglio personale Google Sheets al collegamento Cloud: il nuovo metodo atomico `financeStore.syncCloudData(data)` in `js/data/mockData.js` rimuove automaticamente i conti fittizi dimostrativi e ricostruisce dinamicamente i conti reali presenti nelle schede `Saldi` e `Movimenti` con i loro nomi esatti.

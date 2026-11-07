@@ -460,7 +460,7 @@ class AppController {
         }
 
         try {
-          const cloudData = await googleSheetsService.fetchAllData();
+          const cloudData = await googleSheetsService.fetchAllData(true);
           if (iconSpin) iconSpin.style.animation = '';
           if (cloudData) {
             this.applyCloudData(cloudData);
