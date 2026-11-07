@@ -196,6 +196,20 @@ class FinanceStore {
       return true;
     });
 
+    // Auto-pulizia holdings ed ETF storici estinti/chiusi (es. iShares, SWDA, vecchie posizioni dismesse)
+    accs.forEach(a => {
+      if ((a.isBroker || Array.isArray(a.holdings)) && Array.isArray(a.holdings)) {
+        a.holdings = a.holdings.filter(h => {
+          const ticker = String(h.ticker || '').toUpperCase();
+          const name = String(h.name || '').toLowerCase();
+          if (name.includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI') {
+            return false;
+          }
+          return (parseFloat(h.currentValue) || 0) > 0 || ticker === 'XEON' || ticker === 'VWCE';
+        });
+      }
+    });
+
     // Auto-migrazione: se l'utente ha ancora XEON e VWCE separati, li unifichiamo nel broker Trade Republic
     const hasOldXeon = accs.some(a => a.id === 'xeon' || (a.name || '').toLowerCase() === 'trade republic - xeon');
     const hasOldVwce = accs.some(a => a.id === 'vwce' || (a.name || '').toLowerCase() === 'trade republic - vwce');
@@ -655,6 +669,13 @@ class FinanceStore {
 
         const recognized = AssetCatalogService.lookupAsset(assetPart);
         const ticker = String(recognized?.ticker || assetPart).trim().toUpperCase();
+
+        // Non creare holding per strumenti storici estinti/chiusi (es. iShares, SWDA)
+        const isDisusedAsset = assetPart.toLowerCase().includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI';
+        if (isDisusedAsset && (!activeSaldiHoldings.has(rawName.toLowerCase()) || dInfo?.monthKey !== latestSaldiInfo?.monthKey)) {
+          return;
+        }
+
         let targetHolding = brokerAcc.holdings.find(h =>
           String(h.ticker || '').toUpperCase() === ticker ||
           String(h.name || '').toLowerCase() === assetPart.toLowerCase()
@@ -765,6 +786,17 @@ class FinanceStore {
               h.shares = 0;
               h.safeInvestmentQuota = 0;
             }
+          });
+
+          // Filtra definitivamente dai broker le holdings estinte a zero o chiuse nel passato
+          acc.holdings = acc.holdings.filter(h => {
+            const val = parseFloat(h.currentValue) || 0;
+            const ticker = String(h.ticker || '').toUpperCase();
+            const name = String(h.name || '').toLowerCase();
+            if (name.includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI') {
+              return false;
+            }
+            return val > 0 || ticker === 'XEON' || ticker === 'VWCE';
           });
         }
         this.recalculateBrokerBalance(acc);

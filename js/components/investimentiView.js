@@ -260,7 +260,14 @@ export class InvestimentiView {
       if (acc.isBroker || (Array.isArray(acc.holdings) && acc.holdings.length > 0)) {
         const cash = parseFloat(acc.cashBalance) || 0;
         brokerCashTotal += cash;
-        const brokerHoldings = Array.isArray(acc.holdings) ? acc.holdings : [];
+        const brokerHoldings = (Array.isArray(acc.holdings) ? acc.holdings : []).filter(h => {
+          const ticker = String(h.ticker || '').toUpperCase();
+          const name = String(h.name || '').toLowerCase();
+          if (name.includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI') {
+            return false;
+          }
+          return (parseFloat(h.currentValue) || 0) > 0 || ticker === 'XEON' || ticker === 'VWCE';
+        });
         const brokerHoldingsTotal = brokerHoldings.reduce((s, h) => s + (parseFloat(h.currentValue) || 0), 0);
         const consolidatedTotal = Math.round((cash + brokerHoldingsTotal) * 100) / 100;
 
@@ -519,7 +526,12 @@ export class InvestimentiView {
         </div>
 
         <div class="accounts-list-container">
-          ${brokers.length > 0 ? brokers.map(b => b.holdings.map(h => {
+          ${brokers.length > 0 ? brokers.map(b => b.holdings.filter(h => {
+            const ticker = String(h.ticker || '').toUpperCase();
+            const name = String(h.name || '').toLowerCase();
+            if (name.includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI') return false;
+            return (parseFloat(h.currentValue) || 0) > 0 || ticker === 'XEON' || ticker === 'VWCE';
+          }).map(h => {
             const weightOnPortfolio = totalPortfolio > 0 ? ((h.currentValue / totalPortfolio) * 100).toFixed(1) : '0.0';
             const isXeon = (h.ticker || '').toUpperCase() === 'XEON';
             const badgeColor = isXeon ? '#30D158' : (h.color || '#0A84FF');
