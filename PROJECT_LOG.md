@@ -26,7 +26,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.46 — Produzione Ufficiale `main`)
+## 📊 Stato Attuale dei Moduli (v2026.47 — Produzione Ufficiale `main`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -37,14 +37,14 @@
 | **Cloud Sync & Pairing** | 💎 Cloud Sync Hub & 1-Click Pairing | **Sincronizzazione Intelligente Mac ↔ iPhone**: Badge Cloud interattivo nell'header mobile e nella sidebar desktop, diagnostica automatica errori Apps Script (`/edit` → `/exec`, permessi *"Chiunque"*, verifica Token), auto-refresh silenzioso al ritorno sull'app (`visibilitychange`) e link di pairing rapido `#cloud-setup` per collegare l'iPhone in 1 tocco. |
 | **Spese & Budget** | 💎 Regola 50/30/20 & Clean Lists | **Controllo Consumi Mensili**: Hero Card uscite del mese, micro-chart proporzionato per le buste 50/30/20 (Bisogni, Svago, Risparmio), ripartizione per categoria con icone vettoriali e classifica Top Fornitori senza linee divisorie invasive. |
 | **Investimenti & F.I.R.E.** | 💎 Multi-Asset Broker, PAC & 4% SWR | **Suite FinTech Completa**: Sotto-menu a 4 sezioni (`Portafoglio`, `Rischio`, `Obiettivi`, `F.I.R.E.`), gestione Broker multi-strumento con catalogo ETF/ISIN integrato, separazione Fondo Emergenza monetario vs crescita azionaria, ribilanciamento smart, simulatori PAC e indipendenza finanziaria. |
-| **Storico NW & Fiscale** | 💎 Curva Continua & Multi-Anno | ** Evoluzione Patrimoniale & IRPEF**: Rilevamento automatico multi-anno, curva liscia stile Apple Stocks senza pallini, scorporo dedicato della Previdenza Complementare con calcolo deducibilità fiscale Art. 51 TUIR e studio di Chiusura Fine Mese. |
+| **Storico NW & Fiscale** | 💎 Multi-Anno, Fondo Pensione & Tabella Conti | **Evoluzione Patrimoniale & Riconciliazione Saldi/Movimenti**: Curva di crescita continua e liscia del Fondo Pensione dal 2024 ad oggi, rilevamento automatico multi-anno nello storico (`2024`, `2025`, `2026`), Tabella Conti completa con calcolo retroattivo a zero trattini `-`, integrazione sezione Previdenza Complementare e distinzione contabile netta tra Patrimonio Diretto e Patrimonio Totale. |
 | **Assistente Finanziario & Sicurezza** | 💎 CFO Locale + PIN & Face ID | **Analisi Zero-Latenza & WebAuthn**: Motore analitico locale istantaneo (con supporto opzionale API Gemini), Health Score 0-100, calcolo Financial Runway e sblocco protetto tramite PIN a 4 cifre e Face ID / Touch ID. |
 
 ---
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
 
-- **[BETA - v2026.47] Motore Storico Dinamico Multi-Anno: Riconciliazione Armonica Saldi e Movimenti & Curva Continua Fondo Pensione**:
+- **[MERGE MAIN - v2026.47] Motore Storico Dinamico Multi-Anno: Riconciliazione Armonica Saldi e Movimenti & Curva Continua Fondo Pensione**:
   - **Integrazione Concettuale Saldi & Movimenti ("Dove mi trovo" vs "Come mi muovo")**: I conguagli della scheda `Saldi` costituiscono la verità contabile nei singoli momenti storici ("dove mi trovo"), mentre i `Movimenti` rappresentano il vettore di spostamento ("come mi sto muovendo"). Per i periodi con soli saldi (es. 2024), il sistema fotografa fedelmente le consistenze conguagliate; per i periodi con movimenti (2025/2026), calcola i saldi vivi ad oggi e retroattivamente a fine di ogni mese.
   - **Supporto Saldi Multi-Data & Multi-Anno**: Ingestione intelligente multi-formato (`YYYY-MM-DD`, `DD/MM/YYYY`, `MM/YYYY`, `YYYY-MM`, stringhe testuali italiane es. *"Gennaio 2024"*) per archiviare chiusure certificate per ogni mese presente nel foglio `Saldi`.
   - **Curva di Crescita Continua del Fondo Pensione (`getPensionHistory`)**: Superato il problema della linea piatta orizzontale. La serie storica genera una curva liscia e continua su tutti i mesi (dal 2024 ad oggi), interpolando monotonicamente tra i conguagli certificati ed estrapolando in avanti la quota mensile da cedolino. Aggiunto nella card il badge dinamico di maturato nel periodo (`+€... (+...%)`) e allineamento perfetto tra visualizzazione annuale e "Tutto lo Storico".
