@@ -8,10 +8,10 @@
  */
 
 export const APP_ENV = {
-  branch: 'beta',
-  isBeta: true,
+  branch: 'main',
+  isBeta: false,
   defaultSandboxMode: false,
-  appName: 'Finanze (Beta)',
-  statusDesc: 'Sincronizzazione Live & Locale',
+  appName: 'Finanze',
+  statusDesc: 'Sincronizzazione Live & Cloud',
   mobileText: 'Finanze'
 };
