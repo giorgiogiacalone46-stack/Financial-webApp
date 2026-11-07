@@ -1371,7 +1371,7 @@ export class ImpostazioniView {
     }
 
     try {
-      const data = await googleSheetsService.fetchAllData();
+      const data = await googleSheetsService.fetchAllData(true);
       if (data) {
         financeStore.syncCloudData(data);
         const accCount = financeStore.getAccounts().length;

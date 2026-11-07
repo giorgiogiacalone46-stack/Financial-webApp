@@ -119,7 +119,7 @@ export class GoogleSheetsService {
         };
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 8500);
 
         const response = await fetch(this.webAppUrl, {
           method: 'POST',
@@ -294,7 +294,7 @@ export class GoogleSheetsService {
     }
   }
 
-  async fetchAllData() {
+  async fetchAllData(forceRefresh = false) {
     if (!this.isConfigured()) return null;
 
     try {
@@ -305,6 +305,9 @@ export class GoogleSheetsService {
       targetUrl.searchParams.set('action', 'getAllData');
       if (this.securityToken) {
         targetUrl.searchParams.set('token', this.securityToken);
+      }
+      if (forceRefresh) {
+        targetUrl.searchParams.set('force', '1');
       }
 
       const controller = new AbortController();
@@ -359,7 +362,7 @@ export class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -411,7 +414,7 @@ export class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -462,7 +465,7 @@ export class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -508,7 +511,7 @@ export class GoogleSheetsService {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8500);
 
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
