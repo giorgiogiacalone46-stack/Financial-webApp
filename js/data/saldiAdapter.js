@@ -119,10 +119,14 @@ export class SaldiAdapter {
   }
 
   /**
-   * Analizza e struttura l'intero array di righe da Saldi
+   * Analizza e struttura l'intero array di righe da Saldi e Storico
    */
-  static processSaldi(saldiRows) {
-    if (!Array.isArray(saldiRows) || saldiRows.length === 0) {
+  static processSaldi(saldiRows, storicoRows = []) {
+    const rawAll = [
+      ...(Array.isArray(saldiRows) ? saldiRows : []),
+      ...(Array.isArray(storicoRows) ? storicoRows : [])
+    ];
+    if (rawAll.length === 0) {
       return {
         latestCheckpoint: null,
         activeAccounts: new Map(),
@@ -139,7 +143,7 @@ export class SaldiAdapter {
     let latestCheckpoint = null;
 
     // 1. Normalizzazione e indicizzazione temporale
-    saldiRows.forEach(raw => {
+    rawAll.forEach(raw => {
       const dInfo = this.parseDateInfo(raw.date);
       if (!dInfo) return;
 
@@ -276,6 +280,7 @@ export class SaldiAdapter {
         year: first.dateInfo.year,
         month: first.dateInfo.month,
         netWorth: Math.round(totalNW * 100) / 100,
+        directNW: Math.round(totalLiquidInvested * 100) / 100,
         liquidInvested: Math.round(totalLiquidInvested * 100) / 100,
         accountsBreakdown
       });

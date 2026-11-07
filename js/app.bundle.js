@@ -12,11 +12,11 @@
  */
 
 const APP_ENV = {
-  branch: 'main',
-  isBeta: false,
+  branch: 'beta',
+  isBeta: true,
   defaultSandboxMode: false,
-  appName: 'Finanze - Movimenti',
-  statusDesc: 'Dati Sincronizzati',
+  appName: 'Finanze (Beta)',
+  statusDesc: 'Sincronizzazione Live & Locale',
   mobileText: 'Finanze'
 };
 
@@ -665,27 +665,549 @@ const INITIAL_HISTORICAL_NW = [
 ];
 
 const INITIAL_MONTHLY_BREAKDOWNS = {
-  "10/2026": {
-    "totalNW": 14070.00,
-    "directNW": 10870.00,
+  "01/2024": {
+    "monthKey": "01/2024",
+    "label": "01/2024",
+    "date": "31/01/2024",
+    "isClosed": true,
     "accounts": {
-      "Conto Corrente": 2450.00,
-      "Carta Spese": 180.00,
-      "Portafoglio Investimenti": 8200.00,
-      "Fondo Previdenza": 3200.00,
-      "Contanti": 40.00
-    }
+      "Conto Corrente": 1552.5,
+      "Carta Spese": 345.0,
+      "Portafoglio Investimenti": 1522.5,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 3450.0,
+    "totalNW": 3450.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "02/2024": {
+    "monthKey": "02/2024",
+    "label": "02/2024",
+    "date": "28/02/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 1719.0,
+      "Carta Spese": 382.0,
+      "Portafoglio Investimenti": 1689.0,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 3820.0,
+    "totalNW": 3820.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "03/2024": {
+    "monthKey": "03/2024",
+    "label": "03/2024",
+    "date": "31/03/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 1881.0,
+      "Carta Spese": 418.0,
+      "Portafoglio Investimenti": 1851.0,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 4180.0,
+    "totalNW": 4180.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "04/2024": {
+    "monthKey": "04/2024",
+    "label": "04/2024",
+    "date": "30/04/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2029.5,
+      "Carta Spese": 451.0,
+      "Portafoglio Investimenti": 1999.5,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 4510.0,
+    "totalNW": 4510.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "05/2024": {
+    "monthKey": "05/2024",
+    "label": "05/2024",
+    "date": "31/05/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2214.0,
+      "Carta Spese": 492.0,
+      "Portafoglio Investimenti": 2184.0,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 4920.0,
+    "totalNW": 4920.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "06/2024": {
+    "monthKey": "06/2024",
+    "label": "06/2024",
+    "date": "30/06/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2457.0,
+      "Carta Spese": 546.0,
+      "Portafoglio Investimenti": 2427.0,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 5460.0,
+    "totalNW": 5460.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "07/2024": {
+    "monthKey": "07/2024",
+    "label": "07/2024",
+    "date": "31/07/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2623.5,
+      "Carta Spese": 583.0,
+      "Portafoglio Investimenti": 2593.5,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 5830.0,
+    "totalNW": 5830.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "08/2024": {
+    "monthKey": "08/2024",
+    "label": "08/2024",
+    "date": "31/08/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2569.5,
+      "Carta Spese": 571.0,
+      "Portafoglio Investimenti": 2539.5,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 5710.0,
+    "totalNW": 5710.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "09/2024": {
+    "monthKey": "09/2024",
+    "label": "09/2024",
+    "date": "30/09/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2808.0,
+      "Carta Spese": 624.0,
+      "Portafoglio Investimenti": 2778.0,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 6240.0,
+    "totalNW": 6240.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "10/2024": {
+    "monthKey": "10/2024",
+    "label": "10/2024",
+    "date": "31/10/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3082.5,
+      "Carta Spese": 685.0,
+      "Portafoglio Investimenti": 3052.5,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 6850.0,
+    "totalNW": 6850.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "11/2024": {
+    "monthKey": "11/2024",
+    "label": "11/2024",
+    "date": "30/11/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3294.0,
+      "Carta Spese": 732.0,
+      "Portafoglio Investimenti": 3264.0,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 7320.0,
+    "totalNW": 7320.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "12/2024": {
+    "monthKey": "12/2024",
+    "label": "12/2024",
+    "date": "31/12/2024",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3550.5,
+      "Carta Spese": 789.0,
+      "Portafoglio Investimenti": 3520.5,
+      "Fondo Previdenza": 0.0,
+      "Contanti": 30.0
+    },
+    "directNW": 7890.0,
+    "totalNW": 7890.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "01/2025": {
+    "monthKey": "01/2025",
+    "label": "01/2025",
+    "date": "31/01/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2366.0,
+      "Carta Spese": 422.5,
+      "Portafoglio Investimenti": 3762.5,
+      "Fondo Previdenza": 1859.0,
+      "Contanti": 40.0
+    },
+    "directNW": 6591.0,
+    "totalNW": 8450.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "02/2025": {
+    "monthKey": "02/2025",
+    "label": "02/2025",
+    "date": "28/02/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2458.4,
+      "Carta Spese": 439.0,
+      "Portafoglio Investimenti": 3911.0,
+      "Fondo Previdenza": 1931.6,
+      "Contanti": 40.0
+    },
+    "directNW": 6848.4,
+    "totalNW": 8780.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "03/2025": {
+    "monthKey": "03/2025",
+    "label": "03/2025",
+    "date": "31/03/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2553.6,
+      "Carta Spese": 456.0,
+      "Portafoglio Investimenti": 4064.0,
+      "Fondo Previdenza": 2006.4,
+      "Contanti": 40.0
+    },
+    "directNW": 7113.6,
+    "totalNW": 9120.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "04/2025": {
+    "monthKey": "04/2025",
+    "label": "04/2025",
+    "date": "30/04/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2654.4,
+      "Carta Spese": 474.0,
+      "Portafoglio Investimenti": 4226.0,
+      "Fondo Previdenza": 2085.6,
+      "Contanti": 40.0
+    },
+    "directNW": 7394.4,
+    "totalNW": 9480.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "05/2025": {
+    "monthKey": "05/2025",
+    "label": "05/2025",
+    "date": "31/05/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2758.0,
+      "Carta Spese": 492.5,
+      "Portafoglio Investimenti": 4392.5,
+      "Fondo Previdenza": 2167.0,
+      "Contanti": 40.0
+    },
+    "directNW": 7683.0,
+    "totalNW": 9850.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "06/2025": {
+    "monthKey": "06/2025",
+    "label": "06/2025",
+    "date": "30/06/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2917.6,
+      "Carta Spese": 521.0,
+      "Portafoglio Investimenti": 4649.0,
+      "Fondo Previdenza": 2292.4,
+      "Contanti": 40.0
+    },
+    "directNW": 8127.6,
+    "totalNW": 10420.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "07/2025": {
+    "monthKey": "07/2025",
+    "label": "07/2025",
+    "date": "31/07/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3012.8,
+      "Carta Spese": 538.0,
+      "Portafoglio Investimenti": 4802.0,
+      "Fondo Previdenza": 2367.2,
+      "Contanti": 40.0
+    },
+    "directNW": 8392.8,
+    "totalNW": 10760.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "08/2025": {
+    "monthKey": "08/2025",
+    "label": "08/2025",
+    "date": "31/08/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 2982.0,
+      "Carta Spese": 532.5,
+      "Portafoglio Investimenti": 4752.5,
+      "Fondo Previdenza": 2343.0,
+      "Contanti": 40.0
+    },
+    "directNW": 8307.0,
+    "totalNW": 10650.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "09/2025": {
+    "monthKey": "09/2025",
+    "label": "09/2025",
+    "date": "30/09/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3108.0,
+      "Carta Spese": 555.0,
+      "Portafoglio Investimenti": 4955.0,
+      "Fondo Previdenza": 2442.0,
+      "Contanti": 40.0
+    },
+    "directNW": 8658.0,
+    "totalNW": 11100.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "10/2025": {
+    "monthKey": "10/2025",
+    "label": "10/2025",
+    "date": "31/10/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3214.4,
+      "Carta Spese": 574.0,
+      "Portafoglio Investimenti": 5126.0,
+      "Fondo Previdenza": 2525.6,
+      "Contanti": 40.0
+    },
+    "directNW": 8954.4,
+    "totalNW": 11480.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "11/2025": {
+    "monthKey": "11/2025",
+    "label": "11/2025",
+    "date": "30/11/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3402.0,
+      "Carta Spese": 607.5,
+      "Portafoglio Investimenti": 5427.5,
+      "Fondo Previdenza": 2673.0,
+      "Contanti": 40.0
+    },
+    "directNW": 9477.0,
+    "totalNW": 12150.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "12/2025": {
+    "monthKey": "12/2025",
+    "label": "12/2025",
+    "date": "31/12/2025",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3522.4,
+      "Carta Spese": 629.0,
+      "Portafoglio Investimenti": 5621.0,
+      "Fondo Previdenza": 2767.6,
+      "Contanti": 40.0
+    },
+    "directNW": 9812.4,
+    "totalNW": 12580.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "01/2026": {
+    "monthKey": "01/2026",
+    "label": "01/2026",
+    "date": "31/01/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3598.0,
+      "Carta Spese": 642.5,
+      "Portafoglio Investimenti": 5742.5,
+      "Fondo Previdenza": 2827.0,
+      "Contanti": 40.0
+    },
+    "directNW": 10023.0,
+    "totalNW": 12850.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "02/2026": {
+    "monthKey": "02/2026",
+    "label": "02/2026",
+    "date": "28/02/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3673.6,
+      "Carta Spese": 656.0,
+      "Portafoglio Investimenti": 5864.0,
+      "Fondo Previdenza": 2886.4,
+      "Contanti": 40.0
+    },
+    "directNW": 10233.6,
+    "totalNW": 13120.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "03/2026": {
+    "monthKey": "03/2026",
+    "label": "03/2026",
+    "date": "31/03/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3754.8,
+      "Carta Spese": 670.5,
+      "Portafoglio Investimenti": 5994.5,
+      "Fondo Previdenza": 2950.2,
+      "Contanti": 40.0
+    },
+    "directNW": 10459.8,
+    "totalNW": 13410.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "04/2026": {
+    "monthKey": "04/2026",
+    "label": "04/2026",
+    "date": "30/04/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3836.0,
+      "Carta Spese": 685.0,
+      "Portafoglio Investimenti": 6125.0,
+      "Fondo Previdenza": 3014.0,
+      "Contanti": 40.0
+    },
+    "directNW": 10686.0,
+    "totalNW": 13700.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "05/2026": {
+    "monthKey": "05/2026",
+    "label": "05/2026",
+    "date": "31/05/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3934.0,
+      "Carta Spese": 702.5,
+      "Portafoglio Investimenti": 6282.5,
+      "Fondo Previdenza": 3091.0,
+      "Contanti": 40.0
+    },
+    "directNW": 10959.0,
+    "totalNW": 14050.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "06/2026": {
+    "monthKey": "06/2026",
+    "label": "06/2026",
+    "date": "30/06/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 4110.4,
+      "Carta Spese": 734.0,
+      "Portafoglio Investimenti": 6566.0,
+      "Fondo Previdenza": 3229.6,
+      "Contanti": 40.0
+    },
+    "directNW": 11450.4,
+    "totalNW": 14680.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "07/2026": {
+    "monthKey": "07/2026",
+    "label": "07/2026",
+    "date": "31/07/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 4177.6,
+      "Carta Spese": 746.0,
+      "Portafoglio Investimenti": 6674.0,
+      "Fondo Previdenza": 3282.4,
+      "Contanti": 40.0
+    },
+    "directNW": 11637.6,
+    "totalNW": 14920.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "08/2026": {
+    "monthKey": "08/2026",
+    "label": "08/2026",
+    "date": "31/08/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 4138.4,
+      "Carta Spese": 739.0,
+      "Portafoglio Investimenti": 6611.0,
+      "Fondo Previdenza": 3251.6,
+      "Contanti": 40.0
+    },
+    "directNW": 11528.4,
+    "totalNW": 14780.0,
+    "notes": "Chiusura dimostrativa"
   },
   "09/2026": {
-    "totalNW": 15200.00,
-    "directNW": 12100.00,
+    "monthKey": "09/2026",
+    "label": "09/2026",
+    "date": "30/09/2026",
+    "isClosed": true,
     "accounts": {
-      "Conto Corrente": 3650.00,
-      "Carta Spese": 250.00,
-      "Portafoglio Investimenti": 8200.00,
-      "Fondo Previdenza": 3100.00,
-      "Contanti": 0.00
-    }
+      "Conto Corrente": 4256.0,
+      "Carta Spese": 760.0,
+      "Portafoglio Investimenti": 6800.0,
+      "Fondo Previdenza": 3344.0,
+      "Contanti": 40.0
+    },
+    "directNW": 11856.0,
+    "totalNW": 15200.0,
+    "notes": "Chiusura dimostrativa"
+  },
+  "10/2026": {
+    "monthKey": "10/2026",
+    "label": "10/2026",
+    "date": "31/10/2026",
+    "isClosed": true,
+    "accounts": {
+      "Conto Corrente": 3939.6,
+      "Carta Spese": 703.5,
+      "Portafoglio Investimenti": 6291.5,
+      "Fondo Previdenza": 3095.4,
+      "Contanti": 40.0
+    },
+    "directNW": 10974.6,
+    "totalNW": 14070.0,
+    "notes": "Chiusura dimostrativa"
   }
 };
 
@@ -1302,10 +1824,14 @@ class SaldiAdapter {
   }
 
   /**
-   * Analizza e struttura l'intero array di righe da Saldi
+   * Analizza e struttura l'intero array di righe da Saldi e Storico
    */
-  static processSaldi(saldiRows) {
-    if (!Array.isArray(saldiRows) || saldiRows.length === 0) {
+  static processSaldi(saldiRows, storicoRows = []) {
+    const rawAll = [
+      ...(Array.isArray(saldiRows) ? saldiRows : []),
+      ...(Array.isArray(storicoRows) ? storicoRows : [])
+    ];
+    if (rawAll.length === 0) {
       return {
         latestCheckpoint: null,
         activeAccounts: new Map(),
@@ -1322,7 +1848,7 @@ class SaldiAdapter {
     let latestCheckpoint = null;
 
     // 1. Normalizzazione e indicizzazione temporale
-    saldiRows.forEach(raw => {
+    rawAll.forEach(raw => {
       const dInfo = this.parseDateInfo(raw.date);
       if (!dInfo) return;
 
@@ -1459,6 +1985,7 @@ class SaldiAdapter {
         year: first.dateInfo.year,
         month: first.dateInfo.month,
         netWorth: Math.round(totalNW * 100) / 100,
+        directNW: Math.round(totalLiquidInvested * 100) / 100,
         liquidInvested: Math.round(totalLiquidInvested * 100) / 100,
         accountsBreakdown
       });
@@ -1561,6 +2088,54 @@ class FinanceStore {
     this.nwSnapshots = this.loadNetWorthSnapshots();
     this.monthlyClosings = this.loadMonthlyClosings();
     this.salaryConfig = this.loadSalaryConfig();
+
+    // In ambiente locale (dev), tenta il dynamic import di realData.local.js se presente
+    if (typeof window !== 'undefined') {
+      this.tryLoadLocalRealData().catch(() => {});
+    }
+  }
+
+  async tryLoadLocalRealData() {
+    if (typeof window === 'undefined') return false;
+    const isCloudSynced = localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+    if (isCloudSynced && this.monthlyClosings && Object.keys(this.monthlyClosings).length >= 30) {
+      return false;
+    }
+
+    const isLocalHost = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+    if (!isLocalHost) return false;
+
+    try {
+      const realModule = await import('./realData.local.js');
+      if (realModule && realModule.INITIAL_MONTHLY_BREAKDOWNS) {
+        this.monthlyClosings = { ...realModule.INITIAL_MONTHLY_BREAKDOWNS, ...(this.monthlyClosings || {}) };
+        this.saveMonthlyClosings();
+        if (Array.isArray(realModule.INITIAL_HISTORICAL_NW)) {
+          this.historicalNW = realModule.INITIAL_HISTORICAL_NW;
+        }
+        if (Array.isArray(realModule.INITIAL_SALDI)) {
+          this.saldi = realModule.INITIAL_SALDI;
+        }
+        if (this.accounts.some(a => a.id === 'conto_corrente' || a.name === 'Conto Corrente')) {
+          this.accounts = realModule.INITIAL_ACCOUNTS;
+          this.saveAccounts();
+        }
+        if (this.transactions.some(t => t.id === 'tx_demo_01')) {
+          this.transactions = realModule.INITIAL_TRANSACTIONS;
+          this.saveTransactions();
+        }
+        this.recalculateLiveBalances();
+        if (typeof CustomEvent !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
+        }
+        return true;
+      }
+    } catch (e) {
+      // Prosegue normalmente in demo mode se il file locale non esiste (es. su GitHub)
+    }
+    return false;
   }
 
   // === CONFIGURAZIONE STIPENDIO, 13ESIMA, 14ESIMA, PREMI & BENEFIT ===
@@ -1981,7 +2556,8 @@ class FinanceStore {
 
     const hasTransactions = Array.isArray(data.transactions) && data.transactions.length > 0;
     const hasSaldi = Array.isArray(data.saldi) && data.saldi.length > 0;
-    if (!hasTransactions && !hasSaldi) return false;
+    const hasStorico = Array.isArray(data.storico) && data.storico.length > 0;
+    if (!hasTransactions && !hasSaldi && !hasStorico) return false;
 
     const wasCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
 
@@ -2061,23 +2637,25 @@ class FinanceStore {
     const reconciledAccountIds = new Set();
     let latestSaldiInfo = null;
 
-    // Raccoglie eventuali righe di riepilogo "TOTALE NET WORTH" / "PATRIMONIO COMPLESSIVO" presenti nel foglio
+    // Raccoglie eventuali righe di riepilogo "TOTALE NET WORTH" / "PATRIMONIO COMPLESSIVO" presenti nel foglio (Saldi + Storico)
     const summaryRowsByMonth = new Map();
-    if (hasSaldi) {
-      data.saldi.forEach(s => {
-        if (!s || !s.name) return;
-        const n = String(s.name).trim().toLowerCase();
-        const tp = String(s.type || '').trim().toLowerCase();
-        const isSummary = n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
-        if (isSummary) {
-          const dInfo = this._parseSheetDateInfo(s.date);
-          const bal = parseFloat(s.balance);
-          if (dInfo && !isNaN(bal) && bal > 0) {
-            summaryRowsByMonth.set(dInfo.monthKey, bal);
-          }
+    const rowsToCheckForSummary = [
+      ...(hasSaldi ? data.saldi : []),
+      ...(hasStorico ? data.storico : [])
+    ];
+    rowsToCheckForSummary.forEach(s => {
+      if (!s || !s.name) return;
+      const n = String(s.name).trim().toLowerCase();
+      const tp = String(s.type || '').trim().toLowerCase();
+      const isSummary = n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
+      if (isSummary) {
+        const dInfo = this._parseSheetDateInfo(s.date);
+        const bal = parseFloat(s.balance);
+        if (dInfo && !isNaN(bal) && bal > 0) {
+          summaryRowsByMonth.set(dInfo.monthKey, bal);
         }
-      });
-    }
+      }
+    });
 
     // 4.1 Identificazione deterministica dell'ultimo conguaglio (T_max, es. 31/10/2026)
     validSaldiRows.forEach(s => {
@@ -2430,9 +3008,13 @@ class FinanceStore {
       return false;
     });
 
-    // 5. Raggruppa tutte le righe storiche di Saldi per Mese e genera le Chiusure Mensili certificate
+    // 5. Raggruppa tutte le righe storiche di Storico e Saldi per Mese e genera le Chiusure Mensili certificate
+    const allHistoricalSaldiRows = [
+      ...(hasStorico ? data.storico : []),
+      ...validSaldiRows
+    ];
     const saldiByMonth = new Map();
-    validSaldiRows.forEach(s => {
+    allHistoricalSaldiRows.forEach(s => {
       const dInfo = this._parseSheetDateInfo(s.date);
       if (!dInfo) return;
       const mKey = dInfo.monthKey;
@@ -2506,6 +3088,16 @@ class FinanceStore {
       };
       this.saveNetWorthSnapshot(mKey, totalNW);
     });
+
+    // Rigenera la serie storica ordinata per getHistoricalNetWorth
+    const sortedClosings = Object.keys(this.monthlyClosings).map(mKey => {
+      const [m, y] = mKey.split('/').map(Number);
+      return { month: mKey, value: this.monthlyClosings[mKey].totalNW, sortIdx: y * 12 + m };
+    }).sort((a, b) => a.sortIdx - b.sortIdx);
+
+    if (sortedClosings.length > 0) {
+      this.historicalNW = sortedClosings.map(s => ({ month: s.month, value: s.value }));
+    }
 
     // 5. Scoperta automatica e riconciliazione conti presenti in 'Movimenti' ma non elencati in 'Saldi' (es. Buoni Pasto)
     if (hasTransactions) {
@@ -2986,9 +3578,29 @@ class FinanceStore {
         this.goals = data.goals;
         this.saveGoals();
       }
-      if (data.monthlyClosings) {
+      if (data.monthlyClosings && typeof data.monthlyClosings === 'object') {
         this.monthlyClosings = data.monthlyClosings;
         this.saveMonthlyClosings();
+        Object.entries(data.monthlyClosings).forEach(([mKey, mc]) => {
+          if (mc && mc.totalNW) this.saveNetWorthSnapshot(mKey, mc.totalNW);
+        });
+      }
+      if (Array.isArray(data.historicalNW)) {
+        this.historicalNW = data.historicalNW;
+      }
+      if (Array.isArray(data.saldi)) {
+        this.saldi = data.saldi;
+      }
+      if (data.salaryConfig) {
+        this.saveSalaryConfig(data.salaryConfig);
+      }
+      try {
+        localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
+      } catch (e) {}
+
+      this.recalculateLiveBalances();
+      if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
       }
       return { success: true };
     } catch (e) {
@@ -3558,8 +4170,8 @@ class FinanceStore {
       }
     });
 
-    if (Array.isArray(INITIAL_HISTORICAL_NW)) {
-      INITIAL_HISTORICAL_NW.forEach(item => {
+    if (Array.isArray(this.historicalNW)) {
+      this.historicalNW.forEach(item => {
         if (item.month) {
           const parts = item.month.split('/');
           if (parts.length === 2 && /^\d{4}$/.test(parts[1])) {
@@ -3625,28 +4237,22 @@ class FinanceStore {
       if (saved) closings = JSON.parse(saved);
     } catch (e) {}
 
-    // Pulisce vecchi residui demo corrotti se presenti
-    if (closings && typeof closings === 'object') {
-      Object.keys(closings).forEach(mKey => {
-        const mc = closings[mKey];
-        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
-          delete closings[mKey];
-        }
-      });
+    const isCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+
+    // Se l'app ha chiusure salvate in localStorage (da Cloud Sync o backup caricato), usa quelle con precedenza assoluta
+    if (closings && typeof closings === 'object' && Object.keys(closings).length > 0) {
+      if (isCloudSynced) {
+        Object.keys(closings).forEach(mKey => {
+          const mc = closings[mKey];
+          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
+            delete closings[mKey];
+          }
+        });
+      }
+      return closings;
     }
 
-    // Le chiusure storiche certificate da INITIAL_MONTHLY_BREAKDOWNS costituiscono la verità storica assoluta
-    const merged = JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
-    if (closings && typeof closings === 'object') {
-      Object.entries(closings).forEach(([mKey, data]) => {
-        // Se c'è una chiusura più recente (o personalizzata) non presente nei breakdown storici certificati, la include
-        if (!merged[mKey]) {
-          merged[mKey] = data;
-        }
-      });
-    }
-
-    return merged;
+    return JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
   }
 
   saveMonthlyClosings() {
@@ -4180,7 +4786,9 @@ class FinanceStore {
 
   getHistoricalNetWorth() {
     const savedSnapshots = this.loadNetWorthSnapshots();
-    const baseHistorical = (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
+    const baseHistorical = (Array.isArray(this.historicalNW) && this.historicalNW.length > 0)
+      ? this.historicalNW.filter(d => d.value > 0)
+      : (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
 
     const nwMap = new Map();
     const isSnapshotMap = new Map();
@@ -4202,18 +4810,29 @@ class FinanceStore {
       return Math.round(eff * 100) / 100;
     };
 
+    const pHistory = typeof this.getPensionHistory === 'function' ? this.getPensionHistory() : [];
+    const pMap = new Map();
+    pHistory.forEach(p => { if (p && p.month) pMap.set(p.month, p.value || 0); });
+
     baseHistorical.forEach(item => {
       const closing = this.monthlyClosings ? this.monthlyClosings[item.month] : null;
-      if (closing && closing.accounts) {
-        const eff = computeEffectiveFromAccountsMap(closing.accounts);
-        if (eff > 0) {
-          nwMap.set(item.month, eff);
+      if (closing) {
+        if (closing.accounts) {
+          const eff = computeEffectiveFromAccountsMap(closing.accounts);
+          if (eff > 0) {
+            nwMap.set(item.month, eff);
+            isSnapshotMap.set(item.month, true);
+            return;
+          }
+        }
+        if (typeof closing.directNW === 'number' && closing.directNW > 0) {
+          nwMap.set(item.month, closing.directNW);
           isSnapshotMap.set(item.month, true);
           return;
         }
       }
-      const pensionEstimate = 3000;
-      const effVal = Math.max(1000, item.value - pensionEstimate);
+      const pVal = pMap.get(item.month) || 0;
+      const effVal = Math.max(0, item.value - pVal);
       nwMap.set(item.month, Math.round(effVal * 100) / 100);
       isSnapshotMap.set(item.month, true);
     });
@@ -6186,7 +6805,11 @@ class FinanceStore {
       categories: this.getCategories(),
       goals: this.getGoals(),
       recurring: this.recurringItems,
-      transactions: this.transactions
+      transactions: this.transactions,
+      saldi: this.saldi,
+      monthlyClosings: this.monthlyClosings,
+      historicalNW: this.getHistoricalNetWorth(),
+      salaryConfig: this.getSalaryConfig()
     };
     return JSON.stringify(backup, null, 2);
   }

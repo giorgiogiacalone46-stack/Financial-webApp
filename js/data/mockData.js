@@ -43,6 +43,54 @@ class FinanceStore {
     this.nwSnapshots = this.loadNetWorthSnapshots();
     this.monthlyClosings = this.loadMonthlyClosings();
     this.salaryConfig = this.loadSalaryConfig();
+
+    // In ambiente locale (dev), tenta il dynamic import di realData.local.js se presente
+    if (typeof window !== 'undefined') {
+      this.tryLoadLocalRealData().catch(() => {});
+    }
+  }
+
+  async tryLoadLocalRealData() {
+    if (typeof window === 'undefined') return false;
+    const isCloudSynced = localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+    if (isCloudSynced && this.monthlyClosings && Object.keys(this.monthlyClosings).length >= 30) {
+      return false;
+    }
+
+    const isLocalHost = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+    if (!isLocalHost) return false;
+
+    try {
+      const realModule = await import('./realData.local.js');
+      if (realModule && realModule.INITIAL_MONTHLY_BREAKDOWNS) {
+        this.monthlyClosings = { ...realModule.INITIAL_MONTHLY_BREAKDOWNS, ...(this.monthlyClosings || {}) };
+        this.saveMonthlyClosings();
+        if (Array.isArray(realModule.INITIAL_HISTORICAL_NW)) {
+          this.historicalNW = realModule.INITIAL_HISTORICAL_NW;
+        }
+        if (Array.isArray(realModule.INITIAL_SALDI)) {
+          this.saldi = realModule.INITIAL_SALDI;
+        }
+        if (this.accounts.some(a => a.id === 'conto_corrente' || a.name === 'Conto Corrente')) {
+          this.accounts = realModule.INITIAL_ACCOUNTS;
+          this.saveAccounts();
+        }
+        if (this.transactions.some(t => t.id === 'tx_demo_01')) {
+          this.transactions = realModule.INITIAL_TRANSACTIONS;
+          this.saveTransactions();
+        }
+        this.recalculateLiveBalances();
+        if (typeof CustomEvent !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
+        }
+        return true;
+      }
+    } catch (e) {
+      // Prosegue normalmente in demo mode se il file locale non esiste (es. su GitHub)
+    }
+    return false;
   }
 
   // === CONFIGURAZIONE STIPENDIO, 13ESIMA, 14ESIMA, PREMI & BENEFIT ===
@@ -463,7 +511,8 @@ class FinanceStore {
 
     const hasTransactions = Array.isArray(data.transactions) && data.transactions.length > 0;
     const hasSaldi = Array.isArray(data.saldi) && data.saldi.length > 0;
-    if (!hasTransactions && !hasSaldi) return false;
+    const hasStorico = Array.isArray(data.storico) && data.storico.length > 0;
+    if (!hasTransactions && !hasSaldi && !hasStorico) return false;
 
     const wasCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
 
@@ -543,23 +592,25 @@ class FinanceStore {
     const reconciledAccountIds = new Set();
     let latestSaldiInfo = null;
 
-    // Raccoglie eventuali righe di riepilogo "TOTALE NET WORTH" / "PATRIMONIO COMPLESSIVO" presenti nel foglio
+    // Raccoglie eventuali righe di riepilogo "TOTALE NET WORTH" / "PATRIMONIO COMPLESSIVO" presenti nel foglio (Saldi + Storico)
     const summaryRowsByMonth = new Map();
-    if (hasSaldi) {
-      data.saldi.forEach(s => {
-        if (!s || !s.name) return;
-        const n = String(s.name).trim().toLowerCase();
-        const tp = String(s.type || '').trim().toLowerCase();
-        const isSummary = n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
-        if (isSummary) {
-          const dInfo = this._parseSheetDateInfo(s.date);
-          const bal = parseFloat(s.balance);
-          if (dInfo && !isNaN(bal) && bal > 0) {
-            summaryRowsByMonth.set(dInfo.monthKey, bal);
-          }
+    const rowsToCheckForSummary = [
+      ...(hasSaldi ? data.saldi : []),
+      ...(hasStorico ? data.storico : [])
+    ];
+    rowsToCheckForSummary.forEach(s => {
+      if (!s || !s.name) return;
+      const n = String(s.name).trim().toLowerCase();
+      const tp = String(s.type || '').trim().toLowerCase();
+      const isSummary = n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
+      if (isSummary) {
+        const dInfo = this._parseSheetDateInfo(s.date);
+        const bal = parseFloat(s.balance);
+        if (dInfo && !isNaN(bal) && bal > 0) {
+          summaryRowsByMonth.set(dInfo.monthKey, bal);
         }
-      });
-    }
+      }
+    });
 
     // 4.1 Identificazione deterministica dell'ultimo conguaglio (T_max, es. 31/10/2026)
     validSaldiRows.forEach(s => {
@@ -912,9 +963,13 @@ class FinanceStore {
       return false;
     });
 
-    // 5. Raggruppa tutte le righe storiche di Saldi per Mese e genera le Chiusure Mensili certificate
+    // 5. Raggruppa tutte le righe storiche di Storico e Saldi per Mese e genera le Chiusure Mensili certificate
+    const allHistoricalSaldiRows = [
+      ...(hasStorico ? data.storico : []),
+      ...validSaldiRows
+    ];
     const saldiByMonth = new Map();
-    validSaldiRows.forEach(s => {
+    allHistoricalSaldiRows.forEach(s => {
       const dInfo = this._parseSheetDateInfo(s.date);
       if (!dInfo) return;
       const mKey = dInfo.monthKey;
@@ -988,6 +1043,16 @@ class FinanceStore {
       };
       this.saveNetWorthSnapshot(mKey, totalNW);
     });
+
+    // Rigenera la serie storica ordinata per getHistoricalNetWorth
+    const sortedClosings = Object.keys(this.monthlyClosings).map(mKey => {
+      const [m, y] = mKey.split('/').map(Number);
+      return { month: mKey, value: this.monthlyClosings[mKey].totalNW, sortIdx: y * 12 + m };
+    }).sort((a, b) => a.sortIdx - b.sortIdx);
+
+    if (sortedClosings.length > 0) {
+      this.historicalNW = sortedClosings.map(s => ({ month: s.month, value: s.value }));
+    }
 
     // 5. Scoperta automatica e riconciliazione conti presenti in 'Movimenti' ma non elencati in 'Saldi' (es. Buoni Pasto)
     if (hasTransactions) {
@@ -1468,9 +1533,29 @@ class FinanceStore {
         this.goals = data.goals;
         this.saveGoals();
       }
-      if (data.monthlyClosings) {
+      if (data.monthlyClosings && typeof data.monthlyClosings === 'object') {
         this.monthlyClosings = data.monthlyClosings;
         this.saveMonthlyClosings();
+        Object.entries(data.monthlyClosings).forEach(([mKey, mc]) => {
+          if (mc && mc.totalNW) this.saveNetWorthSnapshot(mKey, mc.totalNW);
+        });
+      }
+      if (Array.isArray(data.historicalNW)) {
+        this.historicalNW = data.historicalNW;
+      }
+      if (Array.isArray(data.saldi)) {
+        this.saldi = data.saldi;
+      }
+      if (data.salaryConfig) {
+        this.saveSalaryConfig(data.salaryConfig);
+      }
+      try {
+        localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
+      } catch (e) {}
+
+      this.recalculateLiveBalances();
+      if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('finanze:accounts-updated', { detail: { accounts: this.accounts } }));
       }
       return { success: true };
     } catch (e) {
@@ -2040,8 +2125,8 @@ class FinanceStore {
       }
     });
 
-    if (Array.isArray(INITIAL_HISTORICAL_NW)) {
-      INITIAL_HISTORICAL_NW.forEach(item => {
+    if (Array.isArray(this.historicalNW)) {
+      this.historicalNW.forEach(item => {
         if (item.month) {
           const parts = item.month.split('/');
           if (parts.length === 2 && /^\d{4}$/.test(parts[1])) {
@@ -2107,28 +2192,22 @@ class FinanceStore {
       if (saved) closings = JSON.parse(saved);
     } catch (e) {}
 
-    // Pulisce vecchi residui demo corrotti se presenti
-    if (closings && typeof closings === 'object') {
-      Object.keys(closings).forEach(mKey => {
-        const mc = closings[mKey];
-        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
-          delete closings[mKey];
-        }
-      });
+    const isCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+
+    // Se l'app ha chiusure salvate in localStorage (da Cloud Sync o backup caricato), usa quelle con precedenza assoluta
+    if (closings && typeof closings === 'object' && Object.keys(closings).length > 0) {
+      if (isCloudSynced) {
+        Object.keys(closings).forEach(mKey => {
+          const mc = closings[mKey];
+          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
+            delete closings[mKey];
+          }
+        });
+      }
+      return closings;
     }
 
-    // Le chiusure storiche certificate da INITIAL_MONTHLY_BREAKDOWNS costituiscono la verità storica assoluta
-    const merged = JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
-    if (closings && typeof closings === 'object') {
-      Object.entries(closings).forEach(([mKey, data]) => {
-        // Se c'è una chiusura più recente (o personalizzata) non presente nei breakdown storici certificati, la include
-        if (!merged[mKey]) {
-          merged[mKey] = data;
-        }
-      });
-    }
-
-    return merged;
+    return JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
   }
 
   saveMonthlyClosings() {
@@ -2662,7 +2741,9 @@ class FinanceStore {
 
   getHistoricalNetWorth() {
     const savedSnapshots = this.loadNetWorthSnapshots();
-    const baseHistorical = (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
+    const baseHistorical = (Array.isArray(this.historicalNW) && this.historicalNW.length > 0)
+      ? this.historicalNW.filter(d => d.value > 0)
+      : (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
 
     const nwMap = new Map();
     const isSnapshotMap = new Map();
@@ -2684,18 +2765,29 @@ class FinanceStore {
       return Math.round(eff * 100) / 100;
     };
 
+    const pHistory = typeof this.getPensionHistory === 'function' ? this.getPensionHistory() : [];
+    const pMap = new Map();
+    pHistory.forEach(p => { if (p && p.month) pMap.set(p.month, p.value || 0); });
+
     baseHistorical.forEach(item => {
       const closing = this.monthlyClosings ? this.monthlyClosings[item.month] : null;
-      if (closing && closing.accounts) {
-        const eff = computeEffectiveFromAccountsMap(closing.accounts);
-        if (eff > 0) {
-          nwMap.set(item.month, eff);
+      if (closing) {
+        if (closing.accounts) {
+          const eff = computeEffectiveFromAccountsMap(closing.accounts);
+          if (eff > 0) {
+            nwMap.set(item.month, eff);
+            isSnapshotMap.set(item.month, true);
+            return;
+          }
+        }
+        if (typeof closing.directNW === 'number' && closing.directNW > 0) {
+          nwMap.set(item.month, closing.directNW);
           isSnapshotMap.set(item.month, true);
           return;
         }
       }
-      const pensionEstimate = 3000;
-      const effVal = Math.max(1000, item.value - pensionEstimate);
+      const pVal = pMap.get(item.month) || 0;
+      const effVal = Math.max(0, item.value - pVal);
       nwMap.set(item.month, Math.round(effVal * 100) / 100);
       isSnapshotMap.set(item.month, true);
     });
@@ -4668,7 +4760,11 @@ class FinanceStore {
       categories: this.getCategories(),
       goals: this.getGoals(),
       recurring: this.recurringItems,
-      transactions: this.transactions
+      transactions: this.transactions,
+      saldi: this.saldi,
+      monthlyClosings: this.monthlyClosings,
+      historicalNW: this.getHistoricalNetWorth(),
+      salaryConfig: this.getSalaryConfig()
     };
     return JSON.stringify(backup, null, 2);
   }

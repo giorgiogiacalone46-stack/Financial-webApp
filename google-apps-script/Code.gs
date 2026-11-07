@@ -13,7 +13,7 @@
  */
 
 var SECURITY_TOKEN = "CHIAVE_SEGRETA_PERSONALE_2026";
-var CACHE_KEY_PREFIX = "finanze_cache_v2";
+var CACHE_KEY_PREFIX = "finanze_cache_v3";
 var CACHE_TTL_SECONDS = 600; // 10 minuti di cache in memoria ultra-rapida (RAM Google)
 
 function doGet(e) {
@@ -120,6 +120,26 @@ function handleRequest(e, method) {
         }
       }
 
+      var storicoList = [];
+      var storicoSheet = ss.getSheetByName("Storico");
+      if (storicoSheet) {
+        var lastRowStorico = storicoSheet.getLastRow();
+        if (lastRowStorico > 1) {
+          var storicoRows = storicoSheet.getRange(1, 1, lastRowStorico, 5).getValues();
+          for (var st = 1; st < storicoRows.length; st++) {
+            var strRow = storicoRows[st];
+            if (!strRow[1] && !strRow[3]) continue;
+            storicoList.push({
+              date: parseDateString(strRow[0]),
+              name: String(strRow[1] || ""),
+              type: String(strRow[2] || ""),
+              balance: parseCurrency(strRow[3]),
+              notes: String(strRow[4] || "")
+            });
+          }
+        }
+      }
+
       var responseData = {
         status: "success",
         count: transactions.length,
@@ -127,7 +147,8 @@ function handleRequest(e, method) {
         cachedAt: new Date().toISOString(),
         data: {
           transactions: transactions,
-          saldi: saldiList
+          saldi: saldiList,
+          storico: storicoList
         }
       };
 

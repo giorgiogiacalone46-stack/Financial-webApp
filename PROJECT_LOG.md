@@ -26,23 +26,30 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.49 — Produzione Ufficiale `main`)
+## 📊 Stato Attuale dei Moduli (v2026.50 — Sviluppo Attivo `beta`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
+| **Storico NW & Fiscale** | 💎 Matrice Pluriennale Certificata & Zero-Stime | **Riconciliazione Deterministica 2024-2026**: Allineamento integrale al centesimo dai conguagli storici certificati. Rimossa ogni costante magica (eliminata stima arbitraria a 3.000 €). Quadratura 2024 perfetta a 2.419,02 € con soli BTC e Buddybank; 2025 chiuso a 6.971,48 €; 2026 con soli asset vivi. |
+| **Cloud Sync & Pairing** | 💎 Scheda 'Storico' Dedicata & Snapshot Saldi T_max | **Integrazione Tri-Partita Google Sheets**: La scheda `Saldi` resta a snapshot unico $T_{max}$ (31/10/2026); `Movimenti` intatto e protetto da qualsiasi alterazione; nuova scheda `Storico` su Google Sheets con 187 righe di chiusure certificate per i 34 mesi pregressi restituita via `Code.gs` (cache v3). |
+| **Privacy & Database Demo** | 💎 Zero Dati Sensibili su GitHub | **Isolamento Totale dei Dati Personali**: Repository pubblico equipaggiato con `js/data/demoData.js` a 34 mensilità dimostrative coerenti per tutti i 3 anni. Generato snapshot reale locale `finanze_backup_reale.json` sul Desktop (protetto da `.gitignore`) e potenziato il motore di import/export backup. |
 | **Impostazioni & Sotto-Menu** | 💎 Segmented Capsule & Workout Graphite | **Allineamento Completo al Design System**: Barra segmentata a capsula Apple HIG / Workout a 5 sezioni (`Conti`, `Stipendio`, `Categorie`, `Sicurezza`, `Cloud`) con icone vettoriali SF Symbols, header contestuale Desktop, card monolitiche Graphite `#161618` su Mobile OLED, switch nativi `.apple-switch` e deep-linking via hash (`#impostazioni-sheets`, ecc.). |
 | **Movimenti & Scheda Dettaglio** | 💎 Scroll Nativo & Tab Bar Retrattile | **Scroll-Lock iOS & Azioni Ergonomiche**: Modali a `z-index: 100000`, `body.modal-open` con blocco scroll sottostante, discesa automatica fluida della Bottom Tab Bar all'apertura dei fogli modali, momentum scrolling nativo e pulsante "Elimina Movimento" ben visibile in fondo al foglio. |
 | **Dashboard** | 💎 Hero Net Worth, Cash Flow & Conti | **Panoramica Esecutiva Completa**: Hero Card Patrimonio Effettivo con Segmented Allocation Bar, Flusso Mese a 4 pilastri / Micro-Chart Workout, CTA diretta `+ Nuovo Movimento` (`movimentiView.openModal()`), lista conti con pop-up di dettaglio e riepilogo entrate/uscite mensili. |
-| **Privacy & Database Demo** | 💎 Zero Dati Sensibili su GitHub | **Isolamento Totale dei Dati Personali**: Repository pubblico equipaggiato esclusivamente con `js/data/demoData.js` (conti, transazioni e saldi dimostrativi fittizi). I dati reali dell'utente si popolano unicamente sincronizzando il proprio foglio Google Sheets o importando un file di backup locale (`.gitignore` protegge `*.local.js` e `finanze_backup_*.json`). |
-| **Cloud Sync & Pairing** | 💎 SaldiAdapter & Ledger Multi-Anno | **Sincronizzazione Deterministica Mac ↔ iPhone**: Nuovo motore `SaldiAdapter` (`js/data/saldiAdapter.js`) che tratta la scheda `Saldi` come ledger temporale di conguagli certificati. Isolamento degli asset estinti/chiusi (saldo azzerato nei conti attivi ma conservato nello storico), riconciliazione automatica con i movimenti post-conguaglio, protezione del foglio storico in `Code.gs` e scansione LIFO sull'ultimo conguaglio. |
 | **Spese & Budget** | 💎 Regola 50/30/20 & Clean Lists | **Controllo Consumi Mensili**: Hero Card uscite del mese, micro-chart proporzionato per le buste 50/30/20 (Bisogni, Svago, Risparmio), ripartizione per categoria con icone vettoriali e classifica Top Fornitori senza linee divisorie invasive. |
 | **Investimenti & F.I.R.E.** | 💎 Multi-Asset Broker, PAC & 4% SWR | **Suite FinTech Completa**: Sotto-menu a 4 sezioni (`Portafoglio`, `Rischio`, `Obiettivi`, `F.I.R.E.`), gestione Broker multi-strumento con catalogo ETF/ISIN integrato, separazione Fondo Emergenza monetario vs crescita azionaria, ribilanciamento smart, simulatori PAC e indipendenza finanziaria. |
-| **Storico NW & Fiscale** | 💎 Multi-Anno, Fondo Pensione & Tabella Conti | **Evoluzione Patrimoniale Certificata 2024-2026**: Allineamento integrale al centesimo dai fogli originali dell'utente. Azzeramento completo della retroproiezione fittizia del Fondo Pensione a 500 € nel 2024 (il fondo pensione compare unicamente da Ottobre 2025). Matrice patrimoniale a 5 macro-aree con esclusione a zero-residui dei conti inattivi per ciascun anno. |
 | **Assistente Finanziario & Sicurezza** | 💎 CFO Locale + PIN & Face ID | **Analisi Zero-Latenza & WebAuthn**: Motore analitico locale istantaneo (con supporto opzionale API Gemini), Health Score 0-100, calcolo Financial Runway e sblocco protetto tramite PIN a 4 cifre e Face ID / Touch ID. |
 
 ---
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
+
+- **[BETA v2026.50] Ristrutturazione Completa Storico, Scheda 'Storico' Google Sheets & Isolamento Dati Demo / Reali**:
+  - **Scheda 'Storico' Dedicata su Google Sheets**: Creata e popolata nel foglio `Finanze - Movimenti` la nuova scheda `Storico` con tutte le 34 chiusure mensili certificate dal 01/2024 al 10/2026 (187 righe contabili). Preservata la scheda `Saldi` a snapshot unico ($T_{max}$ al 31/10/2026) e zero modifiche ai movimenti esistenti in `Movimenti`.
+  - **Aggiornamento Apps Script (`Code.gs`)**: L'azione `getAllData` legge `Movimenti`, `Saldi` e `Storico`, servendo l'intera serie storica certificata al client frontend. Invalidazione atomica della RAM cache alla versione `finanze_cache_v3`.
+  - **Riconciliazione Deterministica & Purga Costanti Empiriche (`mockData.js`, `saldiAdapter.js`)**: Eliminata la formula spuria con sottrazione arbitraria di 3.000 €; calcolo di `effectiveNetWorth` ancorato all'effettiva presenza della previdenza (0,00 € prima di Ottobre 2025). Risolto il bug di `loadMonthlyClosings` che impediva la sovrascrittura da parte di `localStorage`.
+  - **Isolamento Privacy su GitHub & Generazione Backup Locale Reale**: Dataset pubblico `demoData.js` arricchito con 34 chiusure demo fittizie per un rendering impeccabile su GitHub. Generato il file `finanze_backup_reale.json` pronto per l'importazione manuale 1-click in `Impostazioni`, con salvataggio completo di `monthlyClosings` e `historicalNW`.
+  - **Compilazione & Validazione Bundle**: Ricompilato `js/app.bundle.js` e validato tramite JavaScriptCore runtime con 0 errori. [2026-11-07]
 
 - **[RELEASE v2026.49] Allineamento Integrale Storico 2024-2026, Purga Totale Fondo Pensione 2024 & Matrice a 5 Macro-Aree**:
   - **Allineamento Storico Ufficiale 2024-2026**: Integrati integralmente in `INITIAL_MONTHLY_BREAKDOWNS` e `INITIAL_HISTORICAL_NW` i 34 mesi certificati dai fogli originali forniti dall'utente (2024 da Gen a Dic, 2025 da Gen a Dic, 2026 da Gen a Set + conguaglio 31/10/2026 e movimenti vivi Novembre).
