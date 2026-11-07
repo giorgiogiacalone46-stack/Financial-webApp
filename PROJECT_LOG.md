@@ -26,7 +26,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.46 — Laboratorio `beta`)
+## 📊 Stato Attuale dei Moduli (v2026.46 — Produzione Ufficiale `main`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -44,7 +44,7 @@
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
 
-- **[BETA v2026.46] Ottimizzazione Tempi di Sincronizzazione Google Sheets & In-Memory RAM Cache (`Code.gs`)**:
+- **[MERGE MAIN - v2026.46] Ottimizzazione Tempi di Sincronizzazione Google Sheets & In-Memory RAM Cache (`Code.gs`)**:
   - **Taglio I/O su Google Sheets**: Sostituito `getDataRange()` con lettura chirurgica delimitata `getRange(1, 1, lastRow, numCols)` su Movimenti (colonne A:J) e Saldi (colonne A:E), abbattendo le celle lette da oltre 52.000 a ~6.600 (-85% overhead I/O).
   - **In-Memory RAM Cache in Apps Script (`CacheService`)**: Implementata cache a chunk sicuri su `CacheService.getScriptCache()` (TTL 10 min); le chiamate di sincronizzazione a freddo/background vengono servite direttamente dalla memoria Google in ~50ms senza aprire il foglio.
   - **Invalidazione Atomica Istantanea**: Ogni operazione di scrittura (`addTransaction`, `updateTransaction`, `deleteTransaction`, `updateAccountBalance`) purga immediatamente la cache (`clearAppCache()`).
