@@ -1873,7 +1873,8 @@ class FinanceStore {
                 }
               }
             });
-            if (latestHoldingRow) {
+            // Solo se l'holding è presente nell'ultimo conguaglio certificato ha saldo/valore attivo oggi
+            if (latestHoldingRow && latestHoldingRow.dInfo && latestHoldingRow.dInfo.monthKey === latestSaldiInfo?.monthKey) {
               const newBal = parseFloat(latestHoldingRow.s.balance) || 0;
               h.currentValue = newBal;
               const refPrice = h.ticker === 'XEON' ? 144.08 : (h.ticker === 'VWCE' ? 124.62 : 100);
@@ -1887,6 +1888,11 @@ class FinanceStore {
               if (!latestBrokerDateInfo || latestHoldingTs >= latestBrokerDateInfo.timestamp) {
                 latestBrokerDateInfo = latestHoldingRow.dInfo;
               }
+            } else {
+              // Holding storica chiusa o liquidata nel passato (es. SWDA, XMME, SEGA, LYQ3)
+              h.currentValue = 0;
+              h.shares = 0;
+              h.safeInvestmentQuota = 0;
             }
           });
         }
@@ -1911,7 +1917,8 @@ class FinanceStore {
             }
           }
         });
-        if (latestRow) {
+        // Solo se il conto compare nell'ultimo conguaglio certificato ha saldo attivo oggi
+        if (latestRow && latestRow.dInfo && latestRow.dInfo.monthKey === latestSaldiInfo?.monthKey) {
           const newBal = parseFloat(latestRow.s.balance) || 0;
           acc.reconciledBalance = newBal;
           acc.balance = newBal;
@@ -1920,8 +1927,31 @@ class FinanceStore {
             acc.lastReconciledDate = latestRow.dInfo.formattedDate;
           }
           reconciledAccountIds.add(acc.id);
+        } else {
+          // Conto storico chiuso o estinto nel passato (es. BTC o Salvadanaio)
+          acc.reconciledBalance = 0;
+          acc.balance = 0;
+          if (latestRow && latestRow.dInfo) {
+            acc.lastReconciledMonth = latestRow.dInfo.monthKey;
+            acc.lastReconciledDate = latestRow.dInfo.formattedDate;
+          }
         }
       }
+    });
+
+    // Rimuove dai conti attivi operativi (this.accounts) i conti storici con saldo zero e privi di movimenti nel ledger
+    this.accounts = this.accounts.filter(acc => {
+      if (acc.balance > 0 || acc.reconciledBalance > 0) return true;
+      if (acc.isBroker) {
+        return Array.isArray(acc.holdings) && acc.holdings.some(h => (parseFloat(h.currentValue) || 0) > 0);
+      }
+      const accNameLower = (acc.name || '').toLowerCase();
+      const hasTransactions = this.transactions && this.transactions.some(t =>
+        (t.account && t.account.toLowerCase() === accNameLower) ||
+        (t.fromAccount && t.fromAccount.toLowerCase() === accNameLower) ||
+        (t.toAccount && t.toAccount.toLowerCase() === accNameLower)
+      );
+      return hasTransactions;
     });
 
     // 5. Raggruppa tutte le righe storiche di Saldi per Mese e genera le Chiusure Mensili certificate
