@@ -173,42 +173,9 @@ function handleRequest(e, method) {
         tx.description || ""
       ]);
 
-      // Allineamento automatico Saldi per mantenere coerenza istantanea con i movimenti
-      try {
-        var saldiSheet = ss.getSheetByName("Saldi");
-        if (saldiSheet) {
-          var lastRowSaldi = saldiSheet.getLastRow();
-          if (lastRowSaldi > 1) {
-            var sRows = saldiSheet.getRange(1, 1, lastRowSaldi, 5).getValues();
-            var updateSaldo = function(accName, deltaAmt) {
-              if (!accName) return;
-              var lower = String(accName).toLowerCase().trim();
-              for (var k = 1; k < sRows.length; k++) {
-                var rowAcc = String(sRows[k][1] || "").toLowerCase().trim();
-                if (rowAcc === lower || rowAcc.indexOf(lower) !== -1 || lower.indexOf(rowAcc) !== -1) {
-                  var curr = parseCurrency(sRows[k][3]);
-                  var newB = Math.round((curr + deltaAmt) * 100) / 100;
-                  saldiSheet.getRange(k + 1, 4).setValue("€" + newB.toFixed(2).replace(".", ","));
-                  saldiSheet.getRange(k + 1, 1).setValue(formattedDate);
-                  break;
-                }
-              }
-            };
-
-            var txAmt = parseFloat(tx.amount || 0);
-            if (tipoDisplay === "Trasferimento") {
-              updateSaldo(tx.account || tx.fromAccount, -txAmt);
-              if (tx.toAccount) updateSaldo(tx.toAccount, txAmt);
-            } else if (tipoDisplay === "Entrata") {
-              updateSaldo(tx.account || tx.fromAccount, txAmt);
-            } else if (tipoDisplay === "Uscita") {
-              updateSaldo(tx.account || tx.fromAccount, -txAmt);
-            }
-          }
-        }
-      } catch (saldiErr) {
-        // Non bloccare la scrittura del movimento se il foglio Saldi ha un formato custom
-      }
+      // NOTA ARCHITETTURALE: La scheda 'Saldi' contiene i conguagli storici mensili certificati.
+      // I movimenti quotidiani aggiunti in 'Movimenti' non devono intaccare i conguagli storici passati;
+      // l'app Web calcola il saldo vivo sommando i movimenti post-conguaglio alla base certificata.
 
       // Invalida cache in memoria all'istante
       clearAppCache();
@@ -288,8 +255,9 @@ function handleRequest(e, method) {
         var updated = false;
         if (lastRowSaldi > 1) {
           var sRows = saldiSheet.getRange(1, 1, lastRowSaldi, 5).getValues();
-          for (var k = 1; k < sRows.length; k++) {
-            if (String(sRows[k][1]).toLowerCase() === targetAccount.toLowerCase()) {
+          // Scansione dal basso verso l'alto per modificare l'ultimo conguaglio certificato, preservando lo storico passato
+          for (var k = sRows.length - 1; k >= 1; k--) {
+            if (String(sRows[k][1] || "").toLowerCase().trim() === targetAccount.toLowerCase().trim()) {
               saldiSheet.getRange(k + 1, 4).setValue("€" + newBalance.toFixed(2).replace(".", ","));
               saldiSheet.getRange(k + 1, 1).setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy"));
               updated = true;

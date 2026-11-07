@@ -14,6 +14,7 @@ FILES = [
     'js/components/uiComponents.js',
     'js/data/demoData.js',
     'js/data/assetCatalog.js',
+    'js/data/saldiAdapter.js',
     'js/data/mockData.js',
     'js/services/smartCategorizer.js',
     'js/services/googleSheetsService.js',
