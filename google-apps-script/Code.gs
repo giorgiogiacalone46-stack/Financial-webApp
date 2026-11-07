@@ -377,13 +377,6 @@ function createJsonResponseRaw(jsonString) {
   return output;
 }
 
-    return createJsonResponse({ status: "error", message: "Azione non riconosciuta: " + action }, 400);
-
-  } catch (err) {
-    return createJsonResponse({ status: "error", message: err.toString() }, 500);
-  }
-}
-
 // Helper per parsare valute tipo "€15,90", "€ 4.160,00", "4,50"
 function parseCurrency(val) {
   if (typeof val === "number") return val;
