@@ -4621,6 +4621,43 @@ class FinanceStore {
         values.push(val);
         totalAnnualValue += Math.abs(val);
       });
+
+      // Calcolo variazioni mese su mese per l'asset (confronto con mese precedente o con dicembre anno prima)
+      const deltas = [];
+      const deltaPcts = [];
+      const trends = [];
+
+      months.forEach((m, idx) => {
+        let prevVal = 0;
+        if (idx === 0) {
+          const prevYearMonth = `12/${parseInt(yStr, 10) - 1}`;
+          const prevClosing = this.monthlyClosings ? this.monthlyClosings[prevYearMonth] : null;
+          if (prevClosing && prevClosing.accounts) {
+            if (typeof prevClosing.accounts[acc.name] !== 'undefined') {
+              prevVal = parseFloat(prevClosing.accounts[acc.name]) || 0;
+            } else {
+              const matchKey = Object.keys(prevClosing.accounts).find(k => k.trim().toLowerCase() === acc.name.trim().toLowerCase());
+              if (matchKey) prevVal = parseFloat(prevClosing.accounts[matchKey]) || 0;
+            }
+          }
+        } else {
+          prevVal = values[idx - 1] || 0;
+        }
+
+        const curVal = values[idx] || 0;
+        if (curVal > 0 && prevVal > 0) {
+          const diff = Math.round((curVal - prevVal) * 100) / 100;
+          const pct = ((diff / prevVal) * 100).toFixed(1);
+          deltas.push(diff);
+          deltaPcts.push(pct);
+          trends.push(diff > 0.05 ? 'up' : (diff < -0.05 ? 'down' : 'flat'));
+        } else {
+          deltas.push(0);
+          deltaPcts.push('0.0');
+          trends.push('flat');
+        }
+      });
+
       return {
         id: acc.id,
         name: acc.name,
@@ -4631,6 +4668,9 @@ class FinanceStore {
         isInvestment: acc.isInvestment,
         isCrypto: acc.isCrypto,
         values,
+        deltas,
+        deltaPcts,
+        trends,
         totalAnnualValue
       };
     };
@@ -4731,6 +4771,65 @@ class FinanceStore {
       return Math.round((monthlyNetFlows.get(m.monthKey) || 0) * 100) / 100;
     });
 
+    // Calcolo flussi giroconti / versamenti verso investimenti per i 12 mesi dell'anno
+    const investedInflows = months.map(m => {
+      let inflow = 0;
+      (this.transactions || []).forEach(t => {
+        const ym = this.getTxMonthYear(t);
+        if (ym !== m.monthKey) return;
+        const toAcc = (t.toAccount || '').toLowerCase();
+        const fromAcc = (t.fromAccount || '').toLowerCase();
+        const cat = (t.category || '').toLowerCase();
+        const amt = parseFloat(t.amount) || 0;
+
+        const isToInvested = toAcc.includes('trade republic') || toAcc.includes('etf') || toAcc.includes('broker') || toAcc.includes('vwce') || toAcc.includes('xeon') || toAcc.includes('swda');
+        const isFromInvested = fromAcc.includes('trade republic') || fromAcc.includes('etf') || fromAcc.includes('broker') || fromAcc.includes('vwce') || fromAcc.includes('xeon') || fromAcc.includes('swda');
+        const isInvestCategory = cat.includes('pac') || cat.includes('azionario') || cat.includes('investimenti') || cat.includes('fondo emergenza');
+
+        if (t.type === 'transfer') {
+          if (isToInvested && !isFromInvested) {
+            inflow += amt;
+          } else if (isFromInvested && !isToInvested) {
+            inflow -= amt;
+          } else if (isInvestCategory && !isFromInvested) {
+            inflow += amt;
+          }
+        } else if (t.type === 'expense' && isInvestCategory) {
+          inflow += amt;
+        } else if (t.type === 'income' && isFromInvested) {
+          inflow -= amt;
+        }
+      });
+      return Math.round(inflow * 100) / 100;
+    });
+
+    // Calcolo Effetto Mercato mensile (Market Gain/Loss)
+    // Effetto Mercato = Delta Controvalore Totale Investimenti - Versamenti Mese
+    let prevYearInvestedTotal = 0;
+    const prevYearMonthKey = `12/${parseInt(yStr, 10) - 1}`;
+    const prevYearClosing = this.monthlyClosings ? this.monthlyClosings[prevYearMonthKey] : null;
+    if (prevYearClosing && prevYearClosing.accounts) {
+      Object.entries(prevYearClosing.accounts).forEach(([name, bal]) => {
+        const nL = name.toLowerCase();
+        if (nL.includes('trade republic') || nL.includes('etf') || nL.includes('broker') || nL.includes('vwce') || nL.includes('xeon') || nL.includes('swda') || nL.includes('xmme') || nL.includes('sega') || nL.includes('lyq3')) {
+          prevYearInvestedTotal += (parseFloat(bal) || 0);
+        }
+      });
+    }
+
+    const marketEffects = months.map((m, idx) => {
+      const curVal = investedSubtotals[idx] || 0;
+      const prevVal = (idx === 0) ? prevYearInvestedTotal : (investedSubtotals[idx - 1] || 0);
+      if (curVal > 0 && (prevVal > 0 || investedInflows[idx] > 0)) {
+        const delta = curVal - prevVal;
+        return Math.round((delta - investedInflows[idx]) * 100) / 100;
+      }
+      return 0;
+    });
+
+    const totalInflowsYear = investedInflows.reduce((sum, v) => sum + v, 0);
+    const totalMarketEffectYear = marketEffects.reduce((sum, v) => sum + v, 0);
+
     return {
       year: yStr,
       months,
@@ -4740,7 +4839,11 @@ class FinanceStore {
       },
       invested: {
         accounts: investedRows,
-        subtotals: investedSubtotals
+        subtotals: investedSubtotals,
+        monthlyInflows: investedInflows,
+        marketEffects: marketEffects,
+        totalInflowsYear: Math.round(totalInflowsYear * 100) / 100,
+        totalMarketEffectYear: Math.round(totalMarketEffectYear * 100) / 100
       },
       crypto: {
         accounts: cryptoRows,
@@ -15604,11 +15707,30 @@ class StoricoView {
             </div>
           </section>
         ` : `
-          <!-- 5. TABELLA DETTAGLIATA CONTI (OPZIONALE SU RICHIESTA) -->
+          <!-- 5. TABELLA DETTAGLIATA CONTI (CON QUADRATURA INVESTIMENTI & TREND) -->
           <section class="card" style="margin-bottom: var(--space-box-gap-lg); padding: 20px; border-radius: var(--radius-card); border: 1px solid var(--border-subtle); background: var(--bg-card); overflow-x: auto;">
-            <div style="margin-bottom: 14px;">
-              <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Dettaglio Saldi per Conto (${matrix.year})</h4>
-              <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-secondary);">Prospetto contabile mensile suddiviso per macro-area.</p>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+              <div>
+                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Dettaglio Saldi per Conto (${matrix.year})</h4>
+                <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-secondary);">Prospetto contabile mensile con quadratura tra giroconti versati e fluttuazioni di mercato.</p>
+              </div>
+
+              ${matrix.invested && matrix.invested.accounts.length > 0 ? `
+                <div style="display: flex; gap: 14px; background: rgba(175, 82, 222, 0.08); padding: 8px 14px; border-radius: var(--radius-card); border: 1px solid rgba(175, 82, 222, 0.2); flex-wrap: wrap;">
+                  <div>
+                    <span style="font-size: 10.5px; color: var(--text-secondary); display: block; text-transform: uppercase;">Giroconti PAC Anno</span>
+                    <span class="privacy-mask" style="font-size: 13px; font-weight: 700; color: var(--apple-blue); font-variant-numeric: tabular-nums;">
+                      ${matrix.invested.totalInflowsYear > 0 ? '+' : ''}${this.formatCurrency(matrix.invested.totalInflowsYear)}
+                    </span>
+                  </div>
+                  <div style="border-left: 1px solid rgba(175, 82, 222, 0.2); padding-left: 14px;">
+                    <span style="font-size: 10.5px; color: var(--text-secondary); display: block; text-transform: uppercase;">Effetto Mercato Netto</span>
+                    <span class="privacy-mask" style="font-size: 13px; font-weight: 700; color: ${matrix.invested.totalMarketEffectYear >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'}; font-variant-numeric: tabular-nums;">
+                      ${matrix.invested.totalMarketEffectYear >= 0 ? '+' : ''}${this.formatCurrency(matrix.invested.totalMarketEffectYear)}
+                    </span>
+                  </div>
+                </div>
+              ` : ''}
             </div>
 
             <table class="apple-table" style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
@@ -15632,15 +15754,65 @@ class StoricoView {
                 ` : ''}
 
                 ${matrix.invested && matrix.invested.accounts.length > 0 ? `
-                  <tr style="background: var(--bg-hover); font-weight: 700;">
-                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Investimenti &amp; Broker</td>
+                  <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">📈 Investimenti &amp; Broker</td>
                   </tr>
                   ${matrix.invested.accounts.map(acc => `
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
-                      <td style="padding: 8px;">${acc.name}</td>
-                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                      <td style="padding: 8px; font-weight: 600;">${acc.name}</td>
+                      ${acc.values.map((v, idx) => {
+                        const hasVal = v > 0;
+                        const trend = acc.trends ? acc.trends[idx] : null;
+                        const pct = acc.deltaPcts ? acc.deltaPcts[idx] : null;
+                        const showTrend = hasVal && trend && trend !== 'flat' && pct !== '0.0';
+                        return `
+                          <td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">
+                            <div>${hasVal ? this.formatCurrency(v) : '-'}</div>
+                            ${showTrend ? `
+                              <div style="font-size: 10px; font-weight: 700; line-height: 1.1; margin-top: 2px; color: ${trend === 'up' ? 'var(--apple-green)' : 'var(--apple-red)'};">
+                                ${trend === 'up' ? '▲ +' : '▼ '}${pct}%
+                              </div>
+                            ` : ''}
+                          </td>
+                        `;
+                      }).join('')}
                     </tr>
                   `).join('')}
+
+                  <!-- Righe di quadratura contabile Investimenti (Flussi Giroconti e Fluttuazioni Mercato) -->
+                  <tr style="border-top: 1px dashed var(--border-subtle); background: rgba(0, 113, 227, 0.04); font-size: 11.5px;">
+                    <td style="padding: 6px 8px; color: var(--apple-blue); font-style: italic;">
+                      ↳ Giroconti / PAC Versati
+                    </td>
+                    ${(matrix.invested.monthlyInflows || []).map((inf, idx) => {
+                      const mHasData = matrix.months[idx].hasData || matrix.months[idx].isCurrent;
+                      if (!mHasData && inf === 0) return '<td style="padding: 6px 8px; text-align: right; color: var(--text-tertiary);">-</td>';
+                      const isPos = inf > 0;
+                      const isNeg = inf < 0;
+                      return `
+                        <td class="privacy-mask" style="padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: ${isPos ? 'var(--apple-blue)' : (isNeg ? 'var(--apple-orange)' : 'var(--text-tertiary)')};">
+                          ${inf !== 0 ? (isPos ? `+${this.formatCurrency(inf)}` : this.formatCurrency(inf)) : '-'}
+                        </td>
+                      `;
+                    }).join('')}
+                  </tr>
+
+                  <tr style="border-bottom: 1.5px solid rgba(175, 82, 222, 0.2); background: rgba(175, 82, 222, 0.04); font-size: 11.5px;">
+                    <td style="padding: 6px 8px; color: #AF52DE; font-style: italic;">
+                      ↳ Effetto Mercato (Gain/Loss Mese)
+                    </td>
+                    ${(matrix.invested.marketEffects || []).map((eff, idx) => {
+                      const mHasData = matrix.months[idx].hasData || matrix.months[idx].isCurrent;
+                      if (!mHasData && eff === 0) return '<td style="padding: 6px 8px; text-align: right; color: var(--text-tertiary);">-</td>';
+                      const isPos = eff > 0;
+                      const isNeg = eff < 0;
+                      return `
+                        <td class="privacy-mask" style="padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${isPos ? 'var(--apple-green)' : (isNeg ? 'var(--apple-red)' : 'var(--text-tertiary)')};">
+                          ${eff !== 0 ? (isPos ? `+${this.formatCurrency(eff)}` : this.formatCurrency(eff)) : '-'}
+                        </td>
+                      `;
+                    }).join('')}
+                  </tr>
                 ` : ''}
 
                 ${matrix.crypto && matrix.crypto.accounts.length > 0 ? `
@@ -15649,8 +15821,23 @@ class StoricoView {
                   </tr>
                   ${matrix.crypto.accounts.map(acc => `
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
-                      <td style="padding: 8px;">${acc.name}</td>
-                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                      <td style="padding: 8px; font-weight: 600;">${acc.name}</td>
+                      ${acc.values.map((v, idx) => {
+                        const hasVal = v > 0;
+                        const trend = acc.trends ? acc.trends[idx] : null;
+                        const pct = acc.deltaPcts ? acc.deltaPcts[idx] : null;
+                        const showTrend = hasVal && trend && trend !== 'flat' && pct !== '0.0';
+                        return `
+                          <td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">
+                            <div>${hasVal ? this.formatCurrency(v) : '-'}</div>
+                            ${showTrend ? `
+                              <div style="font-size: 10px; font-weight: 700; line-height: 1.1; margin-top: 2px; color: ${trend === 'up' ? 'var(--apple-green)' : 'var(--apple-red)'};">
+                                ${trend === 'up' ? '▲ +' : '▼ '}${pct}%
+                              </div>
+                            ` : ''}
+                          </td>
+                        `;
+                      }).join('')}
                     </tr>
                   `).join('')}
                 ` : ''}

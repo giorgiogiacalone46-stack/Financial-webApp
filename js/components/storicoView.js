@@ -381,11 +381,30 @@ export class StoricoView {
             </div>
           </section>
         ` : `
-          <!-- 5. TABELLA DETTAGLIATA CONTI (OPZIONALE SU RICHIESTA) -->
+          <!-- 5. TABELLA DETTAGLIATA CONTI (CON QUADRATURA INVESTIMENTI & TREND) -->
           <section class="card" style="margin-bottom: var(--space-box-gap-lg); padding: 20px; border-radius: var(--radius-card); border: 1px solid var(--border-subtle); background: var(--bg-card); overflow-x: auto;">
-            <div style="margin-bottom: 14px;">
-              <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Dettaglio Saldi per Conto (${matrix.year})</h4>
-              <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-secondary);">Prospetto contabile mensile suddiviso per macro-area.</p>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+              <div>
+                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Dettaglio Saldi per Conto (${matrix.year})</h4>
+                <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-secondary);">Prospetto contabile mensile con quadratura tra giroconti versati e fluttuazioni di mercato.</p>
+              </div>
+
+              ${matrix.invested && matrix.invested.accounts.length > 0 ? `
+                <div style="display: flex; gap: 14px; background: rgba(175, 82, 222, 0.08); padding: 8px 14px; border-radius: var(--radius-card); border: 1px solid rgba(175, 82, 222, 0.2); flex-wrap: wrap;">
+                  <div>
+                    <span style="font-size: 10.5px; color: var(--text-secondary); display: block; text-transform: uppercase;">Giroconti PAC Anno</span>
+                    <span class="privacy-mask" style="font-size: 13px; font-weight: 700; color: var(--apple-blue); font-variant-numeric: tabular-nums;">
+                      ${matrix.invested.totalInflowsYear > 0 ? '+' : ''}${this.formatCurrency(matrix.invested.totalInflowsYear)}
+                    </span>
+                  </div>
+                  <div style="border-left: 1px solid rgba(175, 82, 222, 0.2); padding-left: 14px;">
+                    <span style="font-size: 10.5px; color: var(--text-secondary); display: block; text-transform: uppercase;">Effetto Mercato Netto</span>
+                    <span class="privacy-mask" style="font-size: 13px; font-weight: 700; color: ${matrix.invested.totalMarketEffectYear >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'}; font-variant-numeric: tabular-nums;">
+                      ${matrix.invested.totalMarketEffectYear >= 0 ? '+' : ''}${this.formatCurrency(matrix.invested.totalMarketEffectYear)}
+                    </span>
+                  </div>
+                </div>
+              ` : ''}
             </div>
 
             <table class="apple-table" style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
@@ -409,15 +428,65 @@ export class StoricoView {
                 ` : ''}
 
                 ${matrix.invested && matrix.invested.accounts.length > 0 ? `
-                  <tr style="background: var(--bg-hover); font-weight: 700;">
-                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Investimenti &amp; Broker</td>
+                  <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">📈 Investimenti &amp; Broker</td>
                   </tr>
                   ${matrix.invested.accounts.map(acc => `
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
-                      <td style="padding: 8px;">${acc.name}</td>
-                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                      <td style="padding: 8px; font-weight: 600;">${acc.name}</td>
+                      ${acc.values.map((v, idx) => {
+                        const hasVal = v > 0;
+                        const trend = acc.trends ? acc.trends[idx] : null;
+                        const pct = acc.deltaPcts ? acc.deltaPcts[idx] : null;
+                        const showTrend = hasVal && trend && trend !== 'flat' && pct !== '0.0';
+                        return `
+                          <td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">
+                            <div>${hasVal ? this.formatCurrency(v) : '-'}</div>
+                            ${showTrend ? `
+                              <div style="font-size: 10px; font-weight: 700; line-height: 1.1; margin-top: 2px; color: ${trend === 'up' ? 'var(--apple-green)' : 'var(--apple-red)'};">
+                                ${trend === 'up' ? '▲ +' : '▼ '}${pct}%
+                              </div>
+                            ` : ''}
+                          </td>
+                        `;
+                      }).join('')}
                     </tr>
                   `).join('')}
+
+                  <!-- Righe di quadratura contabile Investimenti (Flussi Giroconti e Fluttuazioni Mercato) -->
+                  <tr style="border-top: 1px dashed var(--border-subtle); background: rgba(0, 113, 227, 0.04); font-size: 11.5px;">
+                    <td style="padding: 6px 8px; color: var(--apple-blue); font-style: italic;">
+                      ↳ Giroconti / PAC Versati
+                    </td>
+                    ${(matrix.invested.monthlyInflows || []).map((inf, idx) => {
+                      const mHasData = matrix.months[idx].hasData || matrix.months[idx].isCurrent;
+                      if (!mHasData && inf === 0) return '<td style="padding: 6px 8px; text-align: right; color: var(--text-tertiary);">-</td>';
+                      const isPos = inf > 0;
+                      const isNeg = inf < 0;
+                      return `
+                        <td class="privacy-mask" style="padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: ${isPos ? 'var(--apple-blue)' : (isNeg ? 'var(--apple-orange)' : 'var(--text-tertiary)')};">
+                          ${inf !== 0 ? (isPos ? `+${this.formatCurrency(inf)}` : this.formatCurrency(inf)) : '-'}
+                        </td>
+                      `;
+                    }).join('')}
+                  </tr>
+
+                  <tr style="border-bottom: 1.5px solid rgba(175, 82, 222, 0.2); background: rgba(175, 82, 222, 0.04); font-size: 11.5px;">
+                    <td style="padding: 6px 8px; color: #AF52DE; font-style: italic;">
+                      ↳ Effetto Mercato (Gain/Loss Mese)
+                    </td>
+                    ${(matrix.invested.marketEffects || []).map((eff, idx) => {
+                      const mHasData = matrix.months[idx].hasData || matrix.months[idx].isCurrent;
+                      if (!mHasData && eff === 0) return '<td style="padding: 6px 8px; text-align: right; color: var(--text-tertiary);">-</td>';
+                      const isPos = eff > 0;
+                      const isNeg = eff < 0;
+                      return `
+                        <td class="privacy-mask" style="padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: ${isPos ? 'var(--apple-green)' : (isNeg ? 'var(--apple-red)' : 'var(--text-tertiary)')};">
+                          ${eff !== 0 ? (isPos ? `+${this.formatCurrency(eff)}` : this.formatCurrency(eff)) : '-'}
+                        </td>
+                      `;
+                    }).join('')}
+                  </tr>
                 ` : ''}
 
                 ${matrix.crypto && matrix.crypto.accounts.length > 0 ? `
@@ -426,8 +495,23 @@ export class StoricoView {
                   </tr>
                   ${matrix.crypto.accounts.map(acc => `
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
-                      <td style="padding: 8px;">${acc.name}</td>
-                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                      <td style="padding: 8px; font-weight: 600;">${acc.name}</td>
+                      ${acc.values.map((v, idx) => {
+                        const hasVal = v > 0;
+                        const trend = acc.trends ? acc.trends[idx] : null;
+                        const pct = acc.deltaPcts ? acc.deltaPcts[idx] : null;
+                        const showTrend = hasVal && trend && trend !== 'flat' && pct !== '0.0';
+                        return `
+                          <td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">
+                            <div>${hasVal ? this.formatCurrency(v) : '-'}</div>
+                            ${showTrend ? `
+                              <div style="font-size: 10px; font-weight: 700; line-height: 1.1; margin-top: 2px; color: ${trend === 'up' ? 'var(--apple-green)' : 'var(--apple-red)'};">
+                                ${trend === 'up' ? '▲ +' : '▼ '}${pct}%
+                              </div>
+                            ` : ''}
+                          </td>
+                        `;
+                      }).join('')}
                     </tr>
                   `).join('')}
                 ` : ''}
