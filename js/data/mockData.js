@@ -2594,6 +2594,14 @@ class FinanceStore {
               // la riga del broker genitore rappresenta ESCLUSIVAMENTE la liquidità di cassa non investita (cashBalance)
               const liveAcc = this.findAccount(acc.name);
               val = liveAcc ? (parseFloat(liveAcc.cashBalance) || 0) : 0;
+            } else if (acc.isPension) {
+              // PREVISIONE FONDO PENSIONE PER LO STORICO LIVE:
+              // Previsione basata sulle somme passate (ultimo conguaglio certificato + rateo mensile stimato)
+              val = this.getEstimatedLivePensionBalance(m.monthKey);
+            } else if (acc.isVoucher) {
+              // PREVISIONE BUONI PASTO PER LO STORICO LIVE:
+              // Saldo tessera attuale + eventuale ricarica tipica stimata in arrivo entro il conguaglio
+              val = this.getEstimatedLiveVoucherBalance(m.monthKey);
             } else {
               const liveAcc = this.findAccount(acc.name);
               val = liveAcc ? (liveAcc.balance || 0) : 0;
@@ -3085,6 +3093,87 @@ class FinanceStore {
     return fullTimeline;
   }
 
+  // Previsione live del Fondo Pensione per il mese corrente non ancora chiuso (basata su storico + rateo mensile stimato)
+  getEstimatedLivePensionBalance(monthKey) {
+    const closing = this.monthlyClosings ? this.monthlyClosings[monthKey] : null;
+    if (closing && closing.accounts) {
+      const match = Object.entries(closing.accounts).find(([k]) => k.toLowerCase().includes('pensione') || k.toLowerCase().includes('previden'));
+      if (match && parseFloat(match[1]) > 0) return Math.round(parseFloat(match[1]) * 100) / 100;
+    }
+
+    let lastClosingVal = 0;
+    let lastClosingIdx = -1;
+    if (this.monthlyClosings) {
+      Object.entries(this.monthlyClosings).forEach(([mK, c]) => {
+        if (!c || !c.accounts) return;
+        const [mStr, yStr] = mK.split('/');
+        const idx = parseInt(yStr, 10) * 12 + parseInt(mStr, 10);
+        Object.entries(c.accounts).forEach(([name, bal]) => {
+          if (name.toLowerCase().includes('pensione') || name.toLowerCase().includes('previden')) {
+            const b = parseFloat(bal) || 0;
+            if (b > 0 && idx > lastClosingIdx) {
+              lastClosingIdx = idx;
+              lastClosingVal = b;
+            }
+          }
+        });
+      });
+    }
+
+    if (lastClosingVal <= 0) {
+      const liveAcc = this.findAccount('pensione') || this.findAccount('Fondo Pensione');
+      lastClosingVal = liveAcc ? (parseFloat(liveAcc.balance) || 0) : 0;
+    }
+
+    const configContribution = parseFloat(this.salaryConfig?.monthlyPensionContribution) || 306.53;
+    return Math.round((lastClosingVal + configContribution) * 100) / 100;
+  }
+
+  // Previsione live dei Buoni Pasto per il mese corrente non ancora chiuso (saldo attuale + ricarica tipica stimata)
+  getEstimatedLiveVoucherBalance(monthKey) {
+    const closing = this.monthlyClosings ? this.monthlyClosings[monthKey] : null;
+    if (closing && closing.accounts) {
+      const match = Object.entries(closing.accounts).find(([k]) => k.toLowerCase().includes('buoni pasto') || k.toLowerCase().includes('tiket') || k.toLowerCase().includes('ticket'));
+      if (match && parseFloat(match[1]) > 0) return Math.round(parseFloat(match[1]) * 100) / 100;
+    }
+
+    const liveAcc = this.findAccount('buoni_pasto') || this.findAccount('Buoni Pasto');
+    const currentBalance = liveAcc ? (parseFloat(liveAcc.balance) || 0) : 0;
+
+    let alreadyRechargedInMonth = false;
+    (this.transactions || []).forEach(t => {
+      const ym = this.getTxMonthYear(t);
+      if (ym === monthKey) {
+        const cat = (t.category || '').toLowerCase();
+        const acc = (t.account || t.toAccount || '').toLowerCase();
+        if (t.type === 'income' && (cat.includes('buon') || acc.includes('buon'))) {
+          alreadyRechargedInMonth = true;
+        }
+      }
+    });
+
+    if (alreadyRechargedInMonth) {
+      return Math.round(currentBalance * 100) / 100;
+    }
+
+    const pastRecharges = [];
+    (this.transactions || []).forEach(t => {
+      const cat = (t.category || '').toLowerCase();
+      const acc = (t.account || t.toAccount || '').toLowerCase();
+      if (t.type === 'income' && (cat.includes('buon') || acc.includes('buon'))) {
+        const amt = parseFloat(t.amount) || 0;
+        if (amt > 0) pastRecharges.push(amt);
+      }
+    });
+
+    const recentRecharges = pastRecharges.slice(-5);
+    const avgRecharge = recentRecharges.length > 0
+      ? (recentRecharges.reduce((sum, v) => sum + v, 0) / recentRecharges.length)
+      : 168.00;
+
+    return Math.round((currentBalance + avgRecharge) * 100) / 100;
+  }
+
   // Serie storica dedicata del Fondo Pensione ("Previdenza a Lungo Termine")
   getPensionHistory() {
     const closings = this.monthlyClosings || {};
@@ -3138,10 +3227,12 @@ class FinanceStore {
       });
     }
 
-    // Valore corrente certificato nel summary
+    // Valore corrente per il mese live: se non ancora conguagliato, usa la previsione con il rateo stimato
     const currentPensionVal = Math.round((this.summary.pensionFundTotal || 0) * 100) / 100;
     if (currentPensionVal > 0 && !knownPoints.has(curMonthKey)) {
-      knownPoints.set(curMonthKey, currentPensionVal);
+      const isCurClosed = Boolean(closings[curMonthKey] && (closings[curMonthKey].isClosed || closings[curMonthKey].totalNW > 0));
+      const liveVal = isCurClosed ? currentPensionVal : this.getEstimatedLivePensionBalance(curMonthKey);
+      knownPoints.set(curMonthKey, liveVal);
     }
 
     // Fallback dimostrativo solo se non esiste alcun punto noto
