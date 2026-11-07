@@ -44,9 +44,9 @@
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
 
-- **[MERGE MAIN - v2026.48] Motore Deterministico SaldiAdapter, Ledger Storico Multi-Anno & Protezione Scritture Apps Script**:
+- **[MERGE MAIN - v2026.48] Motore Deterministico SaldiAdapter, Ledger Storico Multi-Anno & Epurazione Conti Estinti**:
   - **Architettura SaldiAdapter (`js/data/saldiAdapter.js`)**: Introdotto motore deterministico per interpretare la scheda `Saldi` come time-series ledger certificata (2024, 2025, 2026).
-  - **Isolamento Asset Estinti & Single Source of Truth**: L'ultimo conguaglio certificato ($T_{max}$) governa lo stato attivo attuale; conti o strumenti liquidati in passato (es. vecchi ETF o wallet dismessi) vengono archiviati con saldo attuale a zero e rimossi dai conti operativi, preservando la loro consistenza reale nei grafici storici.
+  - **Isolamento ed Epurazione Asset Estinti (BTC, Salvadanaio, vecchi ETF)**: L'ultimo conguaglio certificato ($T_{max}$) governa lo stato attivo attuale; risolto il problema della "resurrezione" dei conti estinti dal cumulatore transazioni storiche. Rimosso ogni riferimento a conti dismessi dai conti attivi operativi (`loadAccounts()`, `syncCloudData()`, `dashboardView.js`), mantenendo intatta la loro consistenza reale nei grafici storici del 2024.
   - **Riconciliazione Movimenti Post-Conguaglio**: I saldi vivi odierni riflettono la somma algebrica della base certificata a $T_{max}$ più le transazioni registrate dopo il conguaglio.
   - **Protezione Storico in Apps Script (`Code.gs`)**: Rimossa l'alterazione accidentale della prima riga nella scheda Saldi all'inserimento di un movimento; aggiornato il conguaglio esplicito tramite scansione bottom-up (LIFO) sull'ultimo record valido, garantendo l'integrità del ledger pregresso. [2026-11-07]
 

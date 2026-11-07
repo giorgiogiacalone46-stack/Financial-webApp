@@ -1707,6 +1707,13 @@ class FinanceStore {
       accs = JSON.parse(JSON.stringify(INITIAL_ACCOUNTS));
     }
 
+    // Auto-pulizia conti storici estinti/dismessi (es. BTC, Salvadanaio) rimasti memorizzati nel localStorage
+    accs = accs.filter(a => {
+      const n = String(a.name || '').trim().toLowerCase();
+      if (n === 'btc' || n === 'salvadanaio' || a.id === 'btc' || a.id === 'salvadanaio' || a.isExtinct) return false;
+      return true;
+    });
+
     // Auto-migrazione: se l'utente ha ancora XEON e VWCE separati, li unifichiamo nel broker Trade Republic
     const hasOldXeon = accs.some(a => a.id === 'xeon' || (a.name || '').toLowerCase() === 'trade republic - xeon');
     const hasOldVwce = accs.some(a => a.id === 'vwce' || (a.name || '').toLowerCase() === 'trade republic - vwce');
@@ -2066,7 +2073,52 @@ class FinanceStore {
       });
     }
 
-    // Registra e crea tutti i conti ed eventuali holdings presenti in qualsiasi riga di Saldi
+    // 4.1 Identificazione deterministica dell'ultimo conguaglio (T_max) e isolamento asset estinti
+    validSaldiRows.forEach(s => {
+      const dInfo = this._parseSheetDateInfo(s.date);
+      if (dInfo && (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp)) {
+        latestSaldiInfo = dInfo;
+      }
+    });
+
+    const activeSaldiAccountNames = new Set();
+    const activeSaldiHoldings = new Set();
+    validSaldiRows.forEach(s => {
+      const dInfo = this._parseSheetDateInfo(s.date);
+      if (dInfo && latestSaldiInfo && dInfo.monthKey === latestSaldiInfo.monthKey) {
+        const rawName = String(s.name || '').trim();
+        if (rawName.includes(' - ')) {
+          activeSaldiHoldings.add(rawName.toLowerCase());
+          const broker = rawName.split(' - ')[0].trim().toLowerCase();
+          activeSaldiAccountNames.add(broker);
+        } else {
+          activeSaldiAccountNames.add(rawName.toLowerCase());
+        }
+      }
+    });
+
+    const extinctAccountNames = new Set();
+    validSaldiRows.forEach(s => {
+      const rawName = String(s.name || '').trim();
+      if (rawName.includes(' - ')) {
+        if (!activeSaldiHoldings.has(rawName.toLowerCase())) {
+          extinctAccountNames.add(rawName.toLowerCase());
+        }
+      } else {
+        if (!activeSaldiAccountNames.has(rawName.toLowerCase())) {
+          extinctAccountNames.add(rawName.toLowerCase());
+        }
+      }
+    });
+
+    // Pulisce immediatamente dai conti operativi qualsiasi conto estinto o dismesso (es. BTC, Salvadanaio)
+    this.accounts = (this.accounts || []).filter(a => {
+      const aNameLower = String(a.name || '').trim().toLowerCase();
+      if (extinctAccountNames.has(aNameLower)) return false;
+      return true;
+    });
+
+    // Registra e crea solo i conti ed holdings attivi oggi presenti nei Saldi
     validSaldiRows.forEach(s => {
       const rawName = String(s.name || '').trim();
       const rawType = String(s.type || '').trim();
@@ -2074,9 +2126,9 @@ class FinanceStore {
       if (!rawName || isNaN(bal)) return;
 
       const dInfo = this._parseSheetDateInfo(s.date);
-      if (dInfo && (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp)) {
-        latestSaldiInfo = dInfo;
-      }
+
+      // Salta la creazione di conti o holdings storiche estinte tra i conti operativi vivi
+      if (extinctAccountNames.has(rawName.toLowerCase())) return;
 
       // Caso 4A: Riga sub-asset Broker (es. "Trade Republic - XEON", "Trade Republic - VWCE")
       if (rawName.includes(' - ')) {
@@ -2268,27 +2320,25 @@ class FinanceStore {
           // Conto storico chiuso o estinto nel passato (es. BTC o Salvadanaio)
           acc.reconciledBalance = 0;
           acc.balance = 0;
+          acc.isExtinct = true;
           if (latestRow && latestRow.dInfo) {
             acc.lastReconciledMonth = latestRow.dInfo.monthKey;
             acc.lastReconciledDate = latestRow.dInfo.formattedDate;
           }
+          reconciledAccountIds.add(acc.id);
         }
       }
     });
 
-    // Rimuove dai conti attivi operativi (this.accounts) i conti storici con saldo zero e privi di movimenti nel ledger
+    // Rimuove dai conti attivi operativi (this.accounts) i conti storici estinti o con saldo zero
     this.accounts = this.accounts.filter(acc => {
+      const accNameLower = (acc.name || '').toLowerCase();
+      if (extinctAccountNames.has(accNameLower) || acc.isExtinct) return false;
       if (acc.balance > 0 || acc.reconciledBalance > 0) return true;
       if (acc.isBroker) {
         return Array.isArray(acc.holdings) && acc.holdings.some(h => (parseFloat(h.currentValue) || 0) > 0);
       }
-      const accNameLower = (acc.name || '').toLowerCase();
-      const hasTransactions = this.transactions && this.transactions.some(t =>
-        (t.account && t.account.toLowerCase() === accNameLower) ||
-        (t.fromAccount && t.fromAccount.toLowerCase() === accNameLower) ||
-        (t.toAccount && t.toAccount.toLowerCase() === accNameLower)
-      );
-      return hasTransactions;
+      return false;
     });
 
     // 5. Raggruppa tutte le righe storiche di Saldi per Mese e genera le Chiusure Mensili certificate
@@ -2378,6 +2428,10 @@ class FinanceStore {
           if (cleanName.includes(' - ')) {
             cleanName = cleanName.split(' - ')[0].trim();
           }
+
+          // Se il conto è un conto storico estinto/dismesso, NON deve essere ricreato dai movimenti
+          if (extinctAccountNames.has(cleanName.toLowerCase())) return;
+
           const spec = this._classifyAccountSpec(cleanName);
           const exists = this.accounts.some(a =>
             a.id === spec.accId || String(a.name || '').trim().toLowerCase() === cleanName.toLowerCase()
@@ -7867,8 +7921,13 @@ class DashboardView {
     const monthlyHistory = financeStore.getMonthlyTrendHistory(6);
     const recStatus = financeStore.getMonthlyReconciliationStatus();
 
-    // Conti reali operativi (escluso il Fondo Pensione che ha la sua card dedicata)
-    const operationalAccounts = accounts.filter(acc => !acc.isPension && !acc.name.toLowerCase().includes('pensione'));
+    // Conti reali operativi (escluso il Fondo Pensione che ha la sua card dedicata e conti storici estinti)
+    const operationalAccounts = accounts.filter(acc => {
+      if (acc.isPension || (acc.name || '').toLowerCase().includes('pensione')) return false;
+      const n = (acc.name || '').toLowerCase();
+      if (n === 'btc' || n === 'salvadanaio' || acc.id === 'btc' || acc.id === 'salvadanaio' || acc.isExtinct) return false;
+      return true;
+    });
     const pensionAccount = accounts.find(acc => acc.isPension || acc.name.toLowerCase().includes('pensione'));
     const pensionBalance = pensionAccount ? pensionAccount.balance : summary.pensionFundTotal;
 

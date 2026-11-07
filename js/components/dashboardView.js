@@ -35,8 +35,13 @@ export class DashboardView {
     const monthlyHistory = financeStore.getMonthlyTrendHistory(6);
     const recStatus = financeStore.getMonthlyReconciliationStatus();
 
-    // Conti reali operativi (escluso il Fondo Pensione che ha la sua card dedicata)
-    const operationalAccounts = accounts.filter(acc => !acc.isPension && !acc.name.toLowerCase().includes('pensione'));
+    // Conti reali operativi (escluso il Fondo Pensione che ha la sua card dedicata e conti storici estinti)
+    const operationalAccounts = accounts.filter(acc => {
+      if (acc.isPension || (acc.name || '').toLowerCase().includes('pensione')) return false;
+      const n = (acc.name || '').toLowerCase();
+      if (n === 'btc' || n === 'salvadanaio' || acc.id === 'btc' || acc.id === 'salvadanaio' || acc.isExtinct) return false;
+      return true;
+    });
     const pensionAccount = accounts.find(acc => acc.isPension || acc.name.toLowerCase().includes('pensione'));
     const pensionBalance = pensionAccount ? pensionAccount.balance : summary.pensionFundTotal;
 
