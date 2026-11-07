@@ -2087,7 +2087,7 @@ class FinanceStore {
       });
     }
 
-    // 4.1 Identificazione deterministica dell'ultimo conguaglio (T_max) e isolamento asset estinti
+    // 4.1 Identificazione deterministica dell'ultimo conguaglio (T_max, es. 31/10/2026)
     validSaldiRows.forEach(s => {
       const dInfo = this._parseSheetDateInfo(s.date);
       if (dInfo && (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp)) {
@@ -2095,28 +2095,35 @@ class FinanceStore {
       }
     });
 
+    // RIGOROSA REGOLA ARCHITETTURALE:
+    // I conti operativi e le holdings attive ad oggi derivano ESCLUSIVAMENTE dal conguaglio T_max.
+    // Tutto ciò che compare solo in conguagli passati appartiene allo storico e NON allo stato vivo.
+    const latestClosingRows = validSaldiRows.filter(s => {
+      const dInfo = this._parseSheetDateInfo(s.date);
+      return dInfo && latestSaldiInfo && dInfo.monthKey === latestSaldiInfo.monthKey;
+    });
+
     const activeSaldiAccountNames = new Set();
     const activeSaldiHoldings = new Set();
-    validSaldiRows.forEach(s => {
-      const dInfo = this._parseSheetDateInfo(s.date);
-      if (dInfo && latestSaldiInfo && dInfo.monthKey === latestSaldiInfo.monthKey) {
-        const rawName = String(s.name || '').trim();
-        if (rawName.includes(' - ')) {
-          activeSaldiHoldings.add(rawName.toLowerCase());
-          const broker = rawName.split(' - ')[0].trim().toLowerCase();
-          activeSaldiAccountNames.add(broker);
-        } else {
-          activeSaldiAccountNames.add(rawName.toLowerCase());
-        }
+    latestClosingRows.forEach(s => {
+      const rawName = String(s.name || '').trim();
+      if (rawName.includes(' - ')) {
+        activeSaldiHoldings.add(rawName.toLowerCase());
+        const broker = rawName.split(' - ')[0].trim().toLowerCase();
+        activeSaldiAccountNames.add(broker);
+      } else {
+        activeSaldiAccountNames.add(rawName.toLowerCase());
       }
     });
 
+    // Raccoglie i nomi di TUTTI gli asset storici presenti in passate date ma ASSENTI in T_max
     const extinctAccountNames = new Set();
     validSaldiRows.forEach(s => {
       const rawName = String(s.name || '').trim();
       if (rawName.includes(' - ')) {
         if (!activeSaldiHoldings.has(rawName.toLowerCase())) {
           extinctAccountNames.add(rawName.toLowerCase());
+          extinctAccountNames.add(rawName.split(' - ').slice(1).join(' - ').trim().toLowerCase());
         }
       } else {
         if (!activeSaldiAccountNames.has(rawName.toLowerCase())) {
@@ -2125,15 +2132,15 @@ class FinanceStore {
       }
     });
 
-    // Pulisce immediatamente dai conti operativi qualsiasi conto estinto o dismesso (es. BTC, Salvadanaio)
+    // Reset selettivo dei conti: conserva SOLO i conti certificati presenti in latestClosingRows (e i benefit spesa dai movimenti)
     this.accounts = (this.accounts || []).filter(a => {
       const aNameLower = String(a.name || '').trim().toLowerCase();
-      if (extinctAccountNames.has(aNameLower)) return false;
-      return true;
+      if (extinctAccountNames.has(aNameLower) || a.isExtinct) return false;
+      return activeSaldiAccountNames.has(aNameLower) || a.isVoucher || a.id === 'buoni_pasto';
     });
 
-    // Registra e crea solo i conti ed holdings attivi oggi presenti nei Saldi
-    validSaldiRows.forEach(s => {
+    // Registra e crea solo i conti ed holdings vivi certificati nel conguaglio T_max
+    latestClosingRows.forEach(s => {
       const rawName = String(s.name || '').trim();
       const rawType = String(s.type || '').trim();
       const bal = parseFloat(s.balance);
@@ -2141,7 +2148,7 @@ class FinanceStore {
 
       const dInfo = this._parseSheetDateInfo(s.date);
 
-      // Salta la creazione di conti o holdings storiche estinte tra i conti operativi vivi
+      // Salta categoricamente asset o conti estinti
       if (extinctAccountNames.has(rawName.toLowerCase())) return;
 
       // Caso 4A: Riga sub-asset Broker (es. "Trade Republic - XEON", "Trade Republic - VWCE")
