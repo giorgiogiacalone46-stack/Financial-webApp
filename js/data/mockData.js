@@ -356,6 +356,56 @@ class FinanceStore {
         timestamp: ts
       };
     }
+    // Formato MM/YYYY o M/YYYY (es. "01/2024", "10/2026")
+    if (/^\d{1,2}\/\d{4}$/.test(dateStr)) {
+      const parts = dateStr.split('/');
+      const m = parts[0].padStart(2, '0');
+      const y = parts[1];
+      const d = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+      const ts = new Date(parseInt(y, 10), parseInt(m, 10) - 1, d).getTime();
+      return {
+        formattedDate: `${String(d).padStart(2, '0')}/${m}/${y}`,
+        monthKey: `${m}/${y}`,
+        timestamp: ts
+      };
+    }
+    // Formato YYYY-MM (es. "2024-01")
+    if (/^\d{4}-\d{1,2}$/.test(dateStr)) {
+      const parts = dateStr.split('-');
+      const y = parts[0];
+      const m = parts[1].padStart(2, '0');
+      const d = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+      const ts = new Date(parseInt(y, 10), parseInt(m, 10) - 1, d).getTime();
+      return {
+        formattedDate: `${String(d).padStart(2, '0')}/${m}/${y}`,
+        monthKey: `${m}/${y}`,
+        timestamp: ts
+      };
+    }
+    // Formato testuale mese anno (es. "Gennaio 2024", "Ottobre 2026", "Ott 2026")
+    const itMonths = {
+      'gennaio': '01', 'gen': '01', 'febbraio': '02', 'feb': '02',
+      'marzo': '03', 'mar': '03', 'aprile': '04', 'apr': '04',
+      'maggio': '05', 'mag': '05', 'giugno': '06', 'giu': '06',
+      'luglio': '07', 'lug': '07', 'agosto': '08', 'ago': '08',
+      'settembre': '09', 'set': '09', 'ottobre': '10', 'ott': '10',
+      'novembre': '11', 'nov': '11', 'dicembre': '12', 'dic': '12'
+    };
+    const textMatch = dateStr.toLowerCase().match(/([a-zà-ÿ]+)\s+(\d{4})/);
+    if (textMatch) {
+      const mName = textMatch[1];
+      const y = textMatch[2];
+      const m = itMonths[mName];
+      if (m) {
+        const d = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+        const ts = new Date(parseInt(y, 10), parseInt(m, 10) - 1, d).getTime();
+        return {
+          formattedDate: `${String(d).padStart(2, '0')}/${m}/${y}`,
+          monthKey: `${m}/${y}`,
+          timestamp: ts
+        };
+      }
+    }
     return null;
   }
 
@@ -439,8 +489,8 @@ class FinanceStore {
         cloudAccountNamesLower.add(raw.split(' - ')[0].trim().toLowerCase());
       }
     });
-    if (Array.isArray(this.transactions)) {
-      this.transactions.forEach(t => {
+    if (hasTransactions) {
+      data.transactions.forEach(t => {
         [t.fromAccount, t.account, t.toAccount].forEach(accStr => {
           if (!accStr) return;
           const raw = String(accStr).trim();
@@ -454,8 +504,8 @@ class FinanceStore {
     }
 
     // 3. Rimozione automatica dei conti dimostrativi fittizi di demoData.js non presenti nel foglio reale
-    const DEMO_PLACEHOLDER_IDS = new Set(['conto_corrente', 'carta_spese', 'broker_investimenti']);
-    const DEMO_PLACEHOLDER_NAMES = new Set(['conto corrente', 'carta spese', 'portafoglio investimenti']);
+    const DEMO_PLACEHOLDER_IDS = new Set(['conto_corrente', 'carta_spese', 'broker_investimenti', 'pensione']);
+    const DEMO_PLACEHOLDER_NAMES = new Set(['conto corrente', 'carta spese', 'portafoglio investimenti', 'fondo previdenza']);
 
     this.accounts = (this.accounts || []).filter(a => {
       const aNameLower = String(a.name || '').trim().toLowerCase();
@@ -476,15 +526,34 @@ class FinanceStore {
       });
     }
 
-    // 4. Ricostruzione e allineamento conti dalla scheda 'Saldi'
+    // 4. Ricostruzione e allineamento conti dalla scheda 'Saldi' (Multi-Data & Saldi Storici)
     const reconciledAccountIds = new Set();
     let latestSaldiInfo = null;
 
+    // Raccoglie eventuali righe di riepilogo "TOTALE NET WORTH" / "PATRIMONIO COMPLESSIVO" presenti nel foglio
+    const summaryRowsByMonth = new Map();
+    if (hasSaldi) {
+      data.saldi.forEach(s => {
+        if (!s || !s.name) return;
+        const n = String(s.name).trim().toLowerCase();
+        const tp = String(s.type || '').trim().toLowerCase();
+        const isSummary = n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
+        if (isSummary) {
+          const dInfo = this._parseSheetDateInfo(s.date);
+          const bal = parseFloat(s.balance);
+          if (dInfo && !isNaN(bal) && bal > 0) {
+            summaryRowsByMonth.set(dInfo.monthKey, bal);
+          }
+        }
+      });
+    }
+
+    // Registra e crea tutti i conti ed eventuali holdings presenti in qualsiasi riga di Saldi
     validSaldiRows.forEach(s => {
       const rawName = String(s.name || '').trim();
       const rawType = String(s.type || '').trim();
-      const newBal = parseFloat(s.balance);
-      if (!rawName || isNaN(newBal)) return;
+      const bal = parseFloat(s.balance);
+      if (!rawName || isNaN(bal)) return;
 
       const dInfo = this._parseSheetDateInfo(s.date);
       if (dInfo && (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp)) {
@@ -534,8 +603,6 @@ class FinanceStore {
 
         const recognized = AssetCatalogService.lookupAsset(assetPart);
         const ticker = String(recognized?.ticker || assetPart).trim().toUpperCase();
-        const refPrice = ticker === 'XEON' ? 144.08 : (ticker === 'VWCE' ? 124.62 : 100);
-
         let targetHolding = brokerAcc.holdings.find(h =>
           String(h.ticker || '').toUpperCase() === ticker ||
           String(h.name || '').toLowerCase() === assetPart.toLowerCase()
@@ -550,91 +617,211 @@ class FinanceStore {
             name: recognized?.name || assetPart,
             assetClass: recognized?.assetClass || (isMonetario ? 'monetario' : 'azionario_globale'),
             assetClassLabel: recognized?.classLabel || rawType || (isMonetario ? 'Monetario / Liquidità Sicura' : 'Azionario Globale (All-World)'),
-            shares: refPrice > 0 ? Math.round((newBal / refPrice) * 100) / 100 : 0,
-            price: refPrice,
-            currentValue: newBal,
+            shares: 0,
+            price: ticker === 'XEON' ? 144.08 : (ticker === 'VWCE' ? 124.62 : 100),
+            currentValue: 0,
             color: recognized?.color || (isMonetario ? '#34C759' : '#0071E3'),
-            emergencyMonthsQuota: ticker === 'XEON' ? Math.min(5000, newBal) : 0,
-            safeInvestmentQuota: ticker === 'XEON' ? Math.max(0, Math.round((newBal - 5000) * 100) / 100) : 0,
+            emergencyMonthsQuota: ticker === 'XEON' ? 5000 : 0,
+            safeInvestmentQuota: 0,
             isPac: ticker === 'VWCE',
             pacAmount: ticker === 'VWCE' ? 200 : 0
           };
           brokerAcc.holdings.push(targetHolding);
+        }
+      } else {
+        // Caso 4B: Conto diretto (es. "Buddybank", "Contanti", "Fondo Pensione", "Buoni Pasto")
+        const spec = this._classifyAccountSpec(rawName, rawType);
+        let acc = this.accounts.find(a =>
+          a.id === spec.accId || String(a.name || '').trim().toLowerCase() === rawName.toLowerCase()
+        );
+
+        if (!acc) {
+          acc = {
+            id: spec.accId,
+            name: rawName,
+            provider: spec.provider,
+            type: spec.type,
+            balance: bal,
+            reconciledBalance: bal,
+            cashBalance: 0,
+            isLiquid: spec.isLiquid,
+            isVoucher: spec.isVoucher,
+            isInvestment: spec.isInvestment,
+            isBroker: spec.isBroker,
+            isPension: spec.isPension,
+            holdings: [],
+            lastReconciledMonth: dInfo?.monthKey || '10/2026',
+            lastReconciledDate: dInfo?.formattedDate || '31/10/2026',
+            defaultMode: spec.isPension ? 'delta' : 'balance'
+          };
+          this.accounts.push(acc);
+          this.addProvider(spec.provider);
         } else {
-          targetHolding.currentValue = newBal;
-          const p = parseFloat(targetHolding.price) || refPrice;
-          targetHolding.price = p;
-          if (p > 0) targetHolding.shares = Math.round((newBal / p) * 100) / 100;
-          if (ticker === 'XEON') {
-            const emQuota = targetHolding.emergencyMonthsQuota || 5000;
-            targetHolding.safeInvestmentQuota = Math.max(0, Math.round((newBal - emQuota) * 100) / 100);
+          acc.name = rawName;
+          acc.provider = spec.provider || acc.provider;
+          acc.type = rawType || acc.type || spec.type;
+          acc.isPension = spec.isPension;
+          acc.isVoucher = spec.isVoucher;
+          acc.isBroker = spec.isBroker || acc.isBroker;
+          acc.isInvestment = spec.isInvestment || acc.isInvestment;
+          acc.isLiquid = !acc.isPension && !acc.isVoucher && !acc.isInvestment;
+        }
+      }
+    });
+
+    // Imposta il conguaglio più recente (timestamp più alto) per ciascun conto / holding
+    this.accounts.forEach(acc => {
+      if (acc.isBroker) {
+        let latestBrokerDateInfo = null;
+        if (Array.isArray(acc.holdings)) {
+          acc.holdings.forEach(h => {
+            let latestHoldingRow = null;
+            let latestHoldingTs = -1;
+            validSaldiRows.forEach(s => {
+              const rawName = String(s.name || '').trim();
+              if (rawName.includes(' - ')) {
+                const assetPart = rawName.split(' - ').slice(1).join(' - ').trim();
+                const ticker = h.ticker || '';
+                if (assetPart.toLowerCase() === h.name.toLowerCase() || assetPart.toUpperCase() === ticker.toUpperCase()) {
+                  const dInfo = this._parseSheetDateInfo(s.date);
+                  const ts = dInfo?.timestamp || 0;
+                  if (ts >= latestHoldingTs) {
+                    latestHoldingTs = ts;
+                    latestHoldingRow = { s, dInfo };
+                  }
+                }
+              }
+            });
+            if (latestHoldingRow) {
+              const newBal = parseFloat(latestHoldingRow.s.balance) || 0;
+              h.currentValue = newBal;
+              const refPrice = h.ticker === 'XEON' ? 144.08 : (h.ticker === 'VWCE' ? 124.62 : 100);
+              const p = parseFloat(h.price) || refPrice;
+              h.price = p;
+              if (p > 0) h.shares = Math.round((newBal / p) * 100) / 100;
+              if (h.ticker === 'XEON') {
+                const emQuota = h.emergencyMonthsQuota || 5000;
+                h.safeInvestmentQuota = Math.max(0, Math.round((newBal - emQuota) * 100) / 100);
+              }
+              if (!latestBrokerDateInfo || latestHoldingTs >= latestBrokerDateInfo.timestamp) {
+                latestBrokerDateInfo = latestHoldingRow.dInfo;
+              }
+            }
+          });
+        }
+        this.recalculateBrokerBalance(acc);
+        acc.reconciledBalance = acc.balance;
+        if (latestBrokerDateInfo) {
+          acc.lastReconciledMonth = latestBrokerDateInfo.monthKey;
+          acc.lastReconciledDate = latestBrokerDateInfo.formattedDate;
+        }
+        reconciledAccountIds.add(acc.id);
+      } else {
+        let latestRow = null;
+        let latestTs = -1;
+        validSaldiRows.forEach(s => {
+          const rawName = String(s.name || '').trim();
+          if (this._isMatchingAccount(rawName, acc)) {
+            const dInfo = this._parseSheetDateInfo(s.date);
+            const ts = dInfo?.timestamp || 0;
+            if (ts >= latestTs) {
+              latestTs = ts;
+              latestRow = { s, dInfo };
+            }
+          }
+        });
+        if (latestRow) {
+          const newBal = parseFloat(latestRow.s.balance) || 0;
+          acc.reconciledBalance = newBal;
+          acc.balance = newBal;
+          if (latestRow.dInfo) {
+            acc.lastReconciledMonth = latestRow.dInfo.monthKey;
+            acc.lastReconciledDate = latestRow.dInfo.formattedDate;
+          }
+          reconciledAccountIds.add(acc.id);
+        }
+      }
+    });
+
+    // 5. Raggruppa tutte le righe storiche di Saldi per Mese e genera le Chiusure Mensili certificate
+    const saldiByMonth = new Map();
+    validSaldiRows.forEach(s => {
+      const dInfo = this._parseSheetDateInfo(s.date);
+      if (!dInfo) return;
+      const mKey = dInfo.monthKey;
+      if (!saldiByMonth.has(mKey)) {
+        saldiByMonth.set(mKey, {
+          date: dInfo.formattedDate,
+          timestamp: dInfo.timestamp,
+          rows: []
+        });
+      }
+      const group = saldiByMonth.get(mKey);
+      group.rows.push(s);
+      if (dInfo.timestamp >= group.timestamp) {
+        group.timestamp = dInfo.timestamp;
+        group.date = dInfo.formattedDate;
+      }
+    });
+
+    // Pulisce solo eventuali chiusure demo residue
+    if (this.monthlyClosings) {
+      Object.keys(this.monthlyClosings).forEach(mKey => {
+        const mc = this.monthlyClosings[mKey];
+        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
+          delete this.monthlyClosings[mKey];
+        }
+      });
+    } else {
+      this.monthlyClosings = {};
+    }
+
+    saldiByMonth.forEach((group, mKey) => {
+      const closingAccounts = {};
+      let directNW = 0;
+      let pensionBal = 0;
+
+      group.rows.forEach(s => {
+        const rawName = String(s.name || '').trim();
+        const bal = parseFloat(s.balance);
+        if (!rawName || isNaN(bal)) return;
+
+        if (rawName.includes(' - ')) {
+          closingAccounts[rawName] = bal;
+          const brokerName = rawName.split(' - ')[0].trim();
+          closingAccounts[brokerName] = Math.round(((closingAccounts[brokerName] || 0) + bal) * 100) / 100;
+          directNW += bal;
+        } else {
+          closingAccounts[rawName] = bal;
+          const lowerName = rawName.toLowerCase();
+          const lowerType = String(s.type || '').toLowerCase();
+          if (lowerName.includes('pensione') || lowerType.includes('previden')) {
+            pensionBal += bal;
+          } else {
+            directNW += bal;
           }
         }
+      });
 
-        this.recalculateBrokerBalance(brokerAcc);
-        brokerAcc.reconciledBalance = brokerAcc.balance;
-        if (dInfo) {
-          brokerAcc.lastReconciledMonth = dInfo.monthKey;
-          brokerAcc.lastReconciledDate = dInfo.formattedDate;
-        }
-        reconciledAccountIds.add(brokerAcc.id);
-        return;
-      }
+      directNW = Math.round(directNW * 100) / 100;
+      const summaryNW = summaryRowsByMonth.get(mKey);
+      const totalNW = summaryNW || Math.round((directNW + pensionBal) * 100) / 100;
 
-      // Caso 4B: Conto diretto (es. "Buddybank", "Contanti", "Fondo Pensione", "Buoni Pasto", "Trade Republic")
-      const spec = this._classifyAccountSpec(rawName, rawType);
-      let acc = this.accounts.find(a =>
-        a.id === spec.accId || String(a.name || '').trim().toLowerCase() === rawName.toLowerCase()
-      );
-
-      if (!acc) {
-        acc = {
-          id: spec.accId,
-          name: rawName,
-          provider: spec.provider,
-          type: spec.type,
-          balance: newBal,
-          reconciledBalance: newBal,
-          cashBalance: 0,
-          isLiquid: spec.isLiquid,
-          isVoucher: spec.isVoucher,
-          isInvestment: spec.isInvestment,
-          isBroker: spec.isBroker,
-          isPension: spec.isPension,
-          holdings: [],
-          lastReconciledMonth: dInfo?.monthKey || '10/2026',
-          lastReconciledDate: dInfo?.formattedDate || '31/10/2026',
-          defaultMode: spec.isPension ? 'delta' : 'balance'
-        };
-        this.accounts.push(acc);
-        this.addProvider(spec.provider);
-      } else {
-        acc.name = rawName;
-        acc.provider = spec.provider || acc.provider;
-        acc.type = rawType || acc.type || spec.type;
-        acc.isPension = spec.isPension;
-        acc.isVoucher = spec.isVoucher;
-        acc.isBroker = spec.isBroker || acc.isBroker;
-        acc.isInvestment = spec.isInvestment || acc.isInvestment;
-        acc.isLiquid = !acc.isPension && !acc.isVoucher && !acc.isInvestment;
-
-        if (!acc.isBroker || !Array.isArray(acc.holdings) || acc.holdings.length === 0) {
-          acc.reconciledBalance = newBal;
-          acc.balance = newBal;
-        } else if (!reconciledAccountIds.has(acc.id)) {
-          acc.reconciledBalance = newBal;
-          acc.balance = newBal;
-        }
-        if (dInfo) {
-          acc.lastReconciledMonth = dInfo.monthKey;
-          acc.lastReconciledDate = dInfo.formattedDate;
-        }
-      }
-      reconciledAccountIds.add(acc.id);
+      this.monthlyClosings[mKey] = {
+        monthKey: mKey,
+        label: mKey,
+        date: group.date,
+        isClosed: true,
+        accounts: closingAccounts,
+        directNW: directNW,
+        totalNW: totalNW,
+        notes: 'Conguaglio Saldi Google Sheets'
+      };
+      this.saveNetWorthSnapshot(mKey, totalNW);
     });
 
     // 5. Scoperta automatica e riconciliazione conti presenti in 'Movimenti' ma non elencati in 'Saldi' (es. Buoni Pasto)
-    if (Array.isArray(this.transactions) && this.transactions.length > 0) {
+    if (hasTransactions) {
       this.transactions.forEach(t => {
         [t.fromAccount, t.account, t.toAccount].forEach(rawAcc => {
           if (!rawAcc) return;
@@ -754,18 +941,7 @@ class FinanceStore {
       localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
     } catch (e) {}
 
-    if (this.monthlyClosings) {
-      Object.keys(this.monthlyClosings).forEach(mKey => {
-        const mc = this.monthlyClosings[mKey];
-        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts)) {
-          delete this.monthlyClosings[mKey];
-        }
-      });
-    } else {
-      this.monthlyClosings = {};
-    }
-
-    // Importa eventuali breakdown mensili dalla scheda annuale (es. '2026') se restituiti dallo script
+    // Importa eventuali breakdown mensili dalla scheda annuale se restituiti dallo script
     if (data.yearlyClosings && typeof data.yearlyClosings === 'object') {
       Object.entries(data.yearlyClosings).forEach(([mKey, mcData]) => {
         if (mcData && mcData.totalNW > 0) {
@@ -773,30 +949,6 @@ class FinanceStore {
           this.saveNetWorthSnapshot(mKey, mcData.totalNW);
         }
       });
-    }
-
-    if (latestSaldiInfo) {
-      const mKey = latestSaldiInfo.monthKey;
-      const closingAccounts = {};
-      let recTotalNW = 0;
-      this.accounts.forEach(a => {
-        const rBal = typeof a.reconciledBalance === 'number' ? a.reconciledBalance : (parseFloat(a.balance) || 0);
-        closingAccounts[a.name] = rBal;
-        if (!a.isVoucher) {
-          recTotalNW += rBal;
-        }
-      });
-      recTotalNW = Math.round(recTotalNW * 100) / 100;
-      this.monthlyClosings[mKey] = {
-        monthKey: mKey,
-        label: mKey,
-        date: latestSaldiInfo.formattedDate,
-        isClosed: true,
-        accounts: closingAccounts,
-        totalNW: recTotalNW,
-        notes: 'Allineato da Google Sheets (Saldi)'
-      };
-      this.saveNetWorthSnapshot(mKey, recTotalNW);
     }
 
     // Allinea gli obiettivi di risparmio se puntavano ancora ai nomi dei conti demo
@@ -1726,6 +1878,19 @@ class FinanceStore {
       });
     }
 
+    // Dai conguagli presenti nella scheda Saldi
+    if (Array.isArray(this.saldi)) {
+      this.saldi.forEach(s => {
+        const dInfo = this._parseSheetDateInfo(s.date);
+        if (dInfo && dInfo.monthKey) {
+          const parts = dInfo.monthKey.split('/');
+          if (parts.length === 2 && /^\d{4}$/.test(parts[1])) {
+            yearsSet.add(parts[1]);
+          }
+        }
+      });
+    }
+
     // Ordina in modo decrescente (es. 2027, 2026, 2025, 2024)
     return Array.from(yearsSet)
       .filter(y => /^\d{4}$/.test(y))
@@ -1775,7 +1940,7 @@ class FinanceStore {
       if (closings && typeof closings === 'object') {
         Object.keys(closings).forEach(mKey => {
           const mc = closings[mKey];
-          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts)) {
+          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
             delete closings[mKey];
           }
         });
@@ -1872,6 +2037,164 @@ class FinanceStore {
     return true;
   }
 
+  // Calcola il saldo retroattivo o proiettato di un conto a fine di un mese specifico combinando Conguagli e Movimenti
+  calculateAccountBalanceAtEndOfMonth(acc, targetMonthKey) {
+    if (!acc || !targetMonthKey) return 0;
+    const [tmStr, tyStr] = targetMonthKey.split('/');
+    const targetMonth = parseInt(tmStr, 10);
+    const targetYear = parseInt(tyStr, 10);
+    if (isNaN(targetMonth) || isNaN(targetYear)) return 0;
+
+    const endOfTargetMonthTs = new Date(targetYear, targetMonth, 0, 23, 59, 59).getTime();
+
+    // 0. Se la chiusura mensile del mese target ha già registrato questo conto o sub-asset, usalo subito
+    const targetClosing = this.monthlyClosings ? this.monthlyClosings[targetMonthKey] : null;
+    if (targetClosing && targetClosing.accounts) {
+      if (typeof targetClosing.accounts[acc.name] !== 'undefined') {
+        return targetClosing.accounts[acc.name];
+      }
+      const matchKey = Object.keys(targetClosing.accounts).find(k => this._isMatchingAccount(k, acc));
+      if (matchKey) {
+        return targetClosing.accounts[matchKey];
+      }
+      if (acc.isBroker) {
+        let brokerSubSum = 0;
+        let found = false;
+        Object.entries(targetClosing.accounts).forEach(([k, v]) => {
+          if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
+            brokerSubSum += (parseFloat(v) || 0);
+            found = true;
+          }
+        });
+        if (found && brokerSubSum > 0) return Math.round(brokerSubSum * 100) / 100;
+      }
+    }
+
+    // 1. Previdenza Complementare (Fondo Pensione): usa la serie continua e interpolata di getPensionHistory()
+    if (acc.isPension) {
+      const pHist = this.getPensionHistory();
+      const pt = pHist.find(p => p.month === targetMonthKey);
+      if (pt && typeof pt.value === 'number') return pt.value;
+      return typeof acc.reconciledBalance === 'number' ? acc.reconciledBalance : (parseFloat(acc.balance) || 0);
+    }
+
+    // 2. Broker Multi-Holding (Trade Republic): somma i saldi dei sotto-asset se disponibili nella chiusura del mese
+    if (acc.isBroker && Array.isArray(acc.holdings) && acc.holdings.length > 0) {
+      let brokerTotal = 0;
+      let hasHoldingClosing = false;
+      acc.holdings.forEach(h => {
+        const fullHoldingName = `${acc.name} - ${h.name || h.ticker}`;
+        const tickerName = `${acc.name} - ${h.ticker}`;
+        const targetClosing = this.monthlyClosings ? this.monthlyClosings[targetMonthKey] : null;
+        if (targetClosing && targetClosing.accounts) {
+          if (typeof targetClosing.accounts[fullHoldingName] !== 'undefined') {
+            brokerTotal += targetClosing.accounts[fullHoldingName];
+            hasHoldingClosing = true;
+          } else if (typeof targetClosing.accounts[tickerName] !== 'undefined') {
+            brokerTotal += targetClosing.accounts[tickerName];
+            hasHoldingClosing = true;
+          }
+        }
+      });
+      if (hasHoldingClosing && brokerTotal > 0) {
+        return Math.round(brokerTotal * 100) / 100;
+      }
+    }
+
+    // 3. Conti ordinari, Broker & Buoni Pasto: trova il conguaglio base più vicino disponibile nel tempo
+    let baseBal = typeof acc.reconciledBalance === 'number' ? acc.reconciledBalance : (parseFloat(acc.balance) || 0);
+    let baseTs = acc.lastReconciledDate ? (this._parseSheetDateInfo(acc.lastReconciledDate)?.timestamp || Date.now()) : Date.now();
+    let minTsDiff = Math.abs(endOfTargetMonthTs - baseTs);
+
+    if (this.monthlyClosings) {
+      Object.entries(this.monthlyClosings).forEach(([mKey, c]) => {
+        if (!c || !c.accounts) return;
+        let cBal = null;
+        if (typeof c.accounts[acc.name] !== 'undefined') {
+          cBal = c.accounts[acc.name];
+        } else {
+          const matchKey = Object.keys(c.accounts).find(k => this._isMatchingAccount(k, acc));
+          if (matchKey) cBal = c.accounts[matchKey];
+          else if (acc.isBroker) {
+            let brokerSubSum = 0;
+            let found = false;
+            Object.entries(c.accounts).forEach(([k, v]) => {
+              if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
+                brokerSubSum += (parseFloat(v) || 0);
+                found = true;
+              }
+            });
+            if (found && brokerSubSum > 0) cBal = brokerSubSum;
+          }
+        }
+        if (cBal !== null && !isNaN(cBal)) {
+          const [cmStr, cyStr] = mKey.split('/');
+          const cTs = new Date(parseInt(cyStr, 10), parseInt(cmStr, 10), 0, 23, 59, 59).getTime();
+          const diff = Math.abs(endOfTargetMonthTs - cTs);
+          if (diff < minTsDiff) {
+            minTsDiff = diff;
+            baseTs = cTs;
+            baseBal = cBal;
+          }
+        }
+      });
+    }
+
+    let netDelta = 0;
+    (this.transactions || []).forEach(t => {
+      const tInfo = this._parseSheetDateInfo(t.date);
+      if (!tInfo) return;
+      const tTs = tInfo.timestamp;
+
+      if (baseTs >= endOfTargetMonthTs) {
+        // Movimenti avvenuti dopo la fine del mese target e fino alla data di riferimento
+        if (tTs > endOfTargetMonthTs && tTs <= baseTs) {
+          const amt = Math.abs(parseFloat(t.amount) || 0);
+          if (amt === 0) return;
+          const type = (t.type || '').toLowerCase();
+          const rawType = (t.rawType || '').toLowerCase();
+          const isExp = type === 'expense' || rawType === 'uscita';
+          const isInc = type === 'income' || rawType === 'entrata';
+          const isTrans = type === 'transfer' || rawType === 'trasferimento' || rawType === 'giroconto';
+
+          const isFrom = this._isMatchingAccount(t.fromAccount || t.account, acc);
+          const isTo = this._isMatchingAccount(t.toAccount, acc);
+
+          if (isExp && isFrom) netDelta += amt;
+          else if (isInc && isFrom) netDelta -= amt;
+          else if (isTrans) {
+            if (isFrom) netDelta += amt;
+            if (isTo) netDelta -= amt;
+          }
+        }
+      } else {
+        // Movimenti avvenuti tra la data base e la fine del mese target
+        if (tTs > baseTs && tTs <= endOfTargetMonthTs) {
+          const amt = Math.abs(parseFloat(t.amount) || 0);
+          if (amt === 0) return;
+          const type = (t.type || '').toLowerCase();
+          const rawType = (t.rawType || '').toLowerCase();
+          const isExp = type === 'expense' || rawType === 'uscita';
+          const isInc = type === 'income' || rawType === 'entrata';
+          const isTrans = type === 'transfer' || rawType === 'trasferimento' || rawType === 'giroconto';
+
+          const isFrom = this._isMatchingAccount(t.fromAccount || t.account, acc);
+          const isTo = this._isMatchingAccount(t.toAccount, acc);
+
+          if (isExp && isFrom) netDelta -= amt;
+          else if (isInc && isFrom) netDelta += amt;
+          else if (isTrans) {
+            if (isFrom) netDelta -= amt;
+            if (isTo) netDelta += amt;
+          }
+        }
+      }
+    });
+
+    const result = Math.round((baseBal + netDelta) * 100) / 100;
+    return Math.max(0, result);
+  }
+
   getYearlyNetworthMatrix(year = null) {
     const availableYears = this.getAvailableYears();
     const defaultYear = availableYears[0] || String(new Date().getFullYear());
@@ -1962,17 +2285,29 @@ class FinanceStore {
         if (m.closing && m.closing.accounts) {
           if (typeof m.closing.accounts[acc.name] !== 'undefined') {
             val = m.closing.accounts[acc.name];
-          } else if (acc.id === 'trade_republic' || acc.name === 'Trade Republic') {
-            const xeonPart = m.closing.accounts['Trade Republic - XEON'] || 0;
-            const vwcePart = m.closing.accounts['Trade Republic - VWCE'] || 0;
-            if (xeonPart > 0 || vwcePart > 0) {
-              val = xeonPart + vwcePart;
+          } else {
+            const matchKey = Object.keys(m.closing.accounts).find(k => this._isMatchingAccount(k, acc));
+            if (matchKey) {
+              val = m.closing.accounts[matchKey];
+            } else if (acc.isBroker) {
+              let brokerSubSum = 0;
+              let foundSub = false;
+              Object.entries(m.closing.accounts).forEach(([k, v]) => {
+                if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
+                  brokerSubSum += (parseFloat(v) || 0);
+                  foundSub = true;
+                }
+              });
+              if (foundSub) val = brokerSubSum;
             }
           }
-        } else if (m.isCurrent) {
-          val = acc.balance;
-        } else if (m.isPast) {
-          val = 0;
+        }
+        if (val === 0) {
+          if (m.isCurrent) {
+            val = acc.balance;
+          } else if (m.isPast) {
+            val = this.calculateAccountBalanceAtEndOfMonth(acc, m.monthKey);
+          }
         }
         values.push(Math.round(val * 100) / 100);
       });
@@ -2002,33 +2337,10 @@ class FinanceStore {
     const pensionSubtotals = calcSubtotals(pensionRows);
 
     // Totale Patrimonio Netto Effettivo ("Zero Allucinazioni"): Esclude il Fondo Pensione
+    // Coerente al centesimo con la somma dei conti esposti nella tabella
     const effectiveNWValues = months.map((m, idx) => {
-      if (m.isCurrent) {
-        // Se il mese corrente è già stato ufficialmente chiuso/conguagliato, usiamo il dato di conguaglio
-        if (m.closing && (m.closing.isClosed || m.closing.totalNW > 0)) {
-          let eff = 0;
-          Object.entries(m.closing.accounts).forEach(([name, bal]) => {
-            const nLower = name.toLowerCase();
-            if (!nLower.includes('pensione') && !nLower.includes('previden')) {
-              eff += (parseFloat(bal) || 0);
-            }
-          });
-          if (eff > 0) return Math.round(eff * 100) / 100;
-        }
-        // Altrimenti include il patrimonio effettivo corrente + entrate stimate del mese in attesa di accredito
-        return Math.round((this.summary.effectiveNetWorth + curMonthPendingEstimatedIncome) * 100) / 100;
-      }
-      if (m.closing && m.closing.accounts) {
-        let eff = 0;
-        Object.entries(m.closing.accounts).forEach(([name, bal]) => {
-          const nLower = name.toLowerCase();
-          if (!nLower.includes('pensione') && !nLower.includes('previden')) {
-            eff += (parseFloat(bal) || 0);
-          }
-        });
-        if (eff > 0) return Math.round(eff * 100) / 100;
-      }
-      const effSum = liquidSubtotals[idx] + voucherSubtotals[idx] + investedSubtotals[idx];
+      const pendingEst = (m.isCurrent && curMonthPendingEstimatedIncome > 0) ? curMonthPendingEstimatedIncome : 0;
+      const effSum = liquidSubtotals[idx] + voucherSubtotals[idx] + investedSubtotals[idx] + pendingEst;
       return Math.round(effSum * 100) / 100;
     });
 
@@ -2134,8 +2446,7 @@ class FinanceStore {
 
   getHistoricalNetWorth() {
     const savedSnapshots = this.loadNetWorthSnapshots();
-    const isCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
-    const baseHistorical = isCloudSynced ? [] : (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
+    const baseHistorical = (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
 
     const nwMap = new Map();
     const isSnapshotMap = new Map();
@@ -2223,9 +2534,9 @@ class FinanceStore {
     const currentMonthKey = `${String(curMonth).padStart(2, '0')}/${curYear}`;
 
     const availableYearsNum = this.getAvailableYears().map(y => parseInt(y, 10)).filter(n => !isNaN(n));
-    const minYear = availableYearsNum.length > 0 ? Math.min(...availableYearsNum) : (isCloudSynced ? curYear : 2024);
+    const minYear = availableYearsNum.length > 0 ? Math.min(...availableYearsNum) : 2024;
     const maxYear = availableYearsNum.length > 0 ? Math.max(...availableYearsNum) : curYear;
-    const startYear = isCloudSynced ? minYear : Math.min(2024, minYear);
+    const startYear = Math.min(2024, minYear);
     const startMonth = 1;
     const endYear = Math.max(curYear, maxYear);
     const endMonth = (endYear > curYear) ? 12 : curMonth;
@@ -2331,39 +2642,152 @@ class FinanceStore {
 
   // Serie storica dedicata del Fondo Pensione ("Previdenza a Lungo Termine")
   getPensionHistory() {
-    const history = [];
     const closings = this.monthlyClosings || {};
     const now = new Date();
-    const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const curMonthKey = `${String(curMonth).padStart(2, '0')}/${curYear}`;
 
-    // Raccoglie dai monthly closings
-    Object.keys(closings).sort().forEach(mKey => {
+    // 1. Finestra temporale coerente con getHistoricalNetWorth (minimo 2024 fino a oggi)
+    const availableYearsNum = this.getAvailableYears().map(y => parseInt(y, 10)).filter(n => !isNaN(n));
+    const minYear = availableYearsNum.length > 0 ? Math.min(...availableYearsNum) : 2024;
+    const maxYear = availableYearsNum.length > 0 ? Math.max(...availableYearsNum) : curYear;
+    const startYear = Math.min(2024, minYear);
+    const startMonth = 1;
+    const endYear = Math.max(curYear, maxYear);
+    const endMonth = (endYear > curYear) ? 12 : curMonth;
+
+    // 2. Raccoglie tutti i punti noti certificati dai conguagli / chiusure e dalla scheda Saldi
+    const knownPoints = new Map();
+
+    // Dai conguagli salvati in monthlyClosings
+    Object.keys(closings).forEach(mKey => {
       const c = closings[mKey];
       if (c && c.accounts) {
         let pVal = 0;
         Object.entries(c.accounts).forEach(([name, bal]) => {
-          if (name.toLowerCase().includes('pensione') || name.toLowerCase().includes('previden')) {
+          const nLow = name.toLowerCase();
+          if (nLow.includes('pensione') || nLow.includes('previden')) {
             pVal += (parseFloat(bal) || 0);
           }
         });
         if (pVal > 0) {
-          history.push({
-            month: mKey,
-            value: Math.round(pVal * 100) / 100,
-            isCurrent: mKey === curMonthKey
-          });
+          knownPoints.set(mKey, Math.round(pVal * 100) / 100);
         }
       }
     });
 
-    // Aggiungi mese corrente se non già presente
-    const hasCurrent = history.some(h => h.month === curMonthKey);
-    if (!hasCurrent) {
-      history.push({
-        month: curMonthKey,
-        value: Math.round(this.summary.pensionFundTotal * 100) / 100,
-        isCurrent: true
+    // Dalla scheda Saldi se presente
+    if (Array.isArray(this.saldi)) {
+      this.saldi.forEach(s => {
+        if (!s || !s.name) return;
+        const nLow = String(s.name).trim().toLowerCase();
+        const tpLow = String(s.type || '').trim().toLowerCase();
+        if (nLow.includes('pensione') || tpLow.includes('previden') || tpLow.includes('pension')) {
+          const dInfo = this._parseSheetDateInfo(s.date);
+          const b = parseFloat(s.balance);
+          if (dInfo && !isNaN(b) && b > 0) {
+            knownPoints.set(dInfo.monthKey, Math.round(b * 100) / 100);
+          }
+        }
       });
+    }
+
+    // Valore corrente certificato nel summary
+    const currentPensionVal = Math.round((this.summary.pensionFundTotal || 0) * 100) / 100;
+    if (currentPensionVal > 0 && !knownPoints.has(curMonthKey)) {
+      knownPoints.set(curMonthKey, currentPensionVal);
+    }
+
+    // Fallback dimostrativo solo se non esiste alcun punto noto
+    if (knownPoints.size === 0) {
+      const fallbackVal = currentPensionVal > 0 ? currentPensionVal : 3200;
+      knownPoints.set(curMonthKey, fallbackVal);
+    }
+
+    // 3. Ordinamento cronologico dei punti noti
+    const knownIndices = [];
+    knownPoints.forEach((val, mKey) => {
+      const [mStr, yStr] = mKey.split('/');
+      const m = parseInt(mStr, 10);
+      const y = parseInt(yStr, 10);
+      if (!isNaN(m) && !isNaN(y)) {
+        knownIndices.push({
+          idx: y * 12 + (m - 1),
+          monthKey: mKey,
+          val
+        });
+      }
+    });
+    knownIndices.sort((a, b) => a.idx - b.idx);
+
+    const monthlyContribution = parseFloat(this.salaryConfig?.monthlyPensionContribution) || 306.53;
+
+    // Funzione di stima e interpolazione continua mese per mese
+    const getPensionValueAtIdx = (targetIdx) => {
+      const exact = knownIndices.find(k => k.idx === targetIdx);
+      if (exact) return exact.val;
+
+      const first = knownIndices[0];
+      if (targetIdx < first.idx) {
+        const monthsDiff = first.idx - targetIdx;
+        let rate = monthlyContribution;
+        if (knownIndices.length > 1) {
+          const last = knownIndices[knownIndices.length - 1];
+          const span = last.idx - first.idx;
+          if (span > 0) {
+            rate = Math.max(50, (last.val - first.val) / span);
+          }
+        }
+        return Math.max(500, Math.round((first.val - (monthsDiff * rate)) * 100) / 100);
+      }
+
+      const last = knownIndices[knownIndices.length - 1];
+      if (targetIdx > last.idx) {
+        const monthsDiff = targetIdx - last.idx;
+        return Math.round((last.val + (monthsDiff * monthlyContribution)) * 100) / 100;
+      }
+
+      let prevPoint = first;
+      let nextPoint = last;
+      for (let i = 0; i < knownIndices.length - 1; i++) {
+        if (knownIndices[i].idx <= targetIdx && knownIndices[i + 1].idx >= targetIdx) {
+          prevPoint = knownIndices[i];
+          nextPoint = knownIndices[i + 1];
+          break;
+        }
+      }
+
+      const totalSpan = nextPoint.idx - prevPoint.idx;
+      if (totalSpan === 0) return prevPoint.val;
+      const progress = (targetIdx - prevPoint.idx) / totalSpan;
+      const interpolated = prevPoint.val + progress * (nextPoint.val - prevPoint.val);
+      return Math.round(interpolated * 100) / 100;
+    };
+
+    // 4. Generazione serie temporale continua
+    const history = [];
+    let y = startYear;
+    let m = startMonth;
+
+    while (y < endYear || (y === endYear && m <= endMonth)) {
+      const monthKey = `${String(m).padStart(2, '0')}/${y}`;
+      const isCurrent = (monthKey === curMonthKey);
+      const targetIdx = y * 12 + (m - 1);
+      const val = getPensionValueAtIdx(targetIdx);
+
+      history.push({
+        month: monthKey,
+        value: val,
+        isCurrent,
+        isSnapshot: knownPoints.has(monthKey)
+      });
+
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
     }
 
     return history;

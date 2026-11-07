@@ -263,6 +263,18 @@ export const INITIAL_SALDI = [
 ];
 
 export const INITIAL_HISTORICAL_NW = [
+  { "month": "01/2024", "value": 3450.00 },
+  { "month": "02/2024", "value": 3820.00 },
+  { "month": "03/2024", "value": 4180.00 },
+  { "month": "04/2024", "value": 4510.00 },
+  { "month": "05/2024", "value": 4920.00 },
+  { "month": "06/2024", "value": 5460.00 },
+  { "month": "07/2024", "value": 5830.00 },
+  { "month": "08/2024", "value": 5710.00 },
+  { "month": "09/2024", "value": 6240.00 },
+  { "month": "10/2024", "value": 6850.00 },
+  { "month": "11/2024", "value": 7320.00 },
+  { "month": "12/2024", "value": 7890.00 },
   { "month": "01/2025", "value": 8450.00 },
   { "month": "02/2025", "value": 8780.00 },
   { "month": "03/2025", "value": 9120.00 },

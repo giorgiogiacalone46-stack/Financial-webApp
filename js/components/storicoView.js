@@ -74,6 +74,13 @@ export class StoricoView {
     const growthPercent = firstVal > 0 ? ((netGrowth / firstVal) * 100).toFixed(1) : '0.0';
     const isGrowthPositive = netGrowth >= 0;
 
+    // Calcolo crescita Fondo Pensione nel periodo selezionato
+    const pFirstVal = filteredPension.length > 0 ? filteredPension[0].value : summary.pensionFundTotal;
+    const pLastVal = filteredPension.length > 0 ? filteredPension[filteredPension.length - 1].value : summary.pensionFundTotal;
+    const pNetGrowth = Math.round((pLastVal - pFirstVal) * 100) / 100;
+    const pGrowthPercent = pFirstVal > 0 ? ((pNetGrowth / pFirstVal) * 100).toFixed(1) : '0.0';
+    const isPGrowthPositive = pNetGrowth >= 0;
+
     // Matrice annuale per dettaglio
     const matrix = financeStore.getYearlyNetworthMatrix(this.selectedYear === 'all' ? defaultYear : this.selectedYear);
 
@@ -319,9 +326,18 @@ export class StoricoView {
                 </div>
               </div>
               <div style="text-align: right;">
-                <span style="font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Maturato</span>
+                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                  <span style="font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em;">
+                    ${this.selectedYear === 'all' ? 'Maturato Complessivo' : `Maturato a fine ${this.selectedYear}`}
+                  </span>
+                  ${pNetGrowth !== 0 ? `
+                    <span class="apple-badge" style="background: rgba(175, 82, 222, 0.14); color: #AF52DE; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 9999px;">
+                      ${isPGrowthPositive ? '+' : ''}${this.formatCurrency(pNetGrowth)} (${isPGrowthPositive ? '+' : ''}${pGrowthPercent}%)
+                    </span>
+                  ` : ''}
+                </div>
                 <div class="privacy-mask" style="font-size: 22px; font-weight: 800; color: #AF52DE; font-variant-numeric: tabular-nums;">
-                  ${this.formatCurrency(summary.pensionFundTotal)}
+                  ${this.formatCurrency(pLastVal)}
                 </div>
               </div>
             </div>
@@ -377,6 +393,18 @@ export class StoricoView {
                   </tr>
                 `).join('')}
 
+                <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
+                  <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">
+                    🛡️ Previdenza Complementare (Fondo Pensione)
+                  </td>
+                </tr>
+                ${matrix.pension.accounts.map(acc => `
+                  <tr style="border-bottom: 1px solid var(--border-subtle);">
+                    <td style="padding: 8px; color: var(--text-primary);">${acc.name}</td>
+                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums; color: #AF52DE; font-weight: 600;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                  </tr>
+                `).join('')}
+
                 ${matrix.totals.pendingEstimatedIncome > 0 ? `
                   <tr style="border-bottom: 1px solid var(--border-subtle); color: var(--apple-blue); font-style: italic; background: rgba(0, 113, 227, 0.04);">
                     <td style="padding: 8px;">Entrate Stimate Mese (in arrivo)</td>
@@ -388,10 +416,19 @@ export class StoricoView {
                   </tr>
                 ` : ''}
 
-                <tr style="background: rgba(52, 199, 89, 0.1); font-weight: 800; border-top: 2px solid var(--apple-green);">
-                  <td style="padding: 10px 8px; color: var(--apple-green);">Patrimonio Effettivo</td>
+                <tr style="background: rgba(52, 199, 89, 0.08); font-weight: 800; border-top: 1.5px solid var(--apple-green);">
+                  <td style="padding: 10px 8px; color: var(--apple-green);">Patrimonio Diretto (Disponibile + Broker)</td>
                   ${matrix.totals.effectiveNetWorth.map(v => `
                     <td class="privacy-mask" style="padding: 10px 8px; text-align: right; color: var(--apple-green); font-variant-numeric: tabular-nums;">
+                      ${this.formatCurrency(v)}
+                    </td>
+                  `).join('')}
+                </tr>
+
+                <tr style="background: rgba(0, 113, 227, 0.1); font-weight: 800; border-top: 2px solid var(--apple-blue);">
+                  <td style="padding: 10px 8px; color: var(--apple-blue);">Patrimonio Totale (Net Worth con Pensione)</td>
+                  ${matrix.totals.totalWithPension.map(v => `
+                    <td class="privacy-mask" style="padding: 10px 8px; text-align: right; color: var(--apple-blue); font-variant-numeric: tabular-nums;">
                       ${this.formatCurrency(v)}
                     </td>
                   `).join('')}
