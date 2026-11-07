@@ -1239,10 +1239,32 @@ class FinanceStore {
     if (!idOrName) return null;
     const q = String(idOrName).trim().toLowerCase();
 
-    // 0. Retrocompatibilità alias broker Trade Republic
-    if (q === 'xeon' || q === 'vwce' || q === 'trade republic - xeon' || q === 'trade republic - vwce') {
-      const tr = this.accounts.find(a => a.id === 'trade_republic' || a.name.toLowerCase() === 'trade republic');
-      if (tr) return tr;
+    // 0. Sottoconti / Holdings specifici di un broker (es. Trade Republic - VWCE, Trade Republic - XEON)
+    if (q.includes(' - ')) {
+      const [parentPart, subPart] = q.split(' - ').map(s => s.trim().toLowerCase());
+      const parentAcc = this.accounts.find(a => a.id.toLowerCase() === parentPart || a.name.toLowerCase() === parentPart);
+      if (parentAcc && Array.isArray(parentAcc.holdings)) {
+        const h = parentAcc.holdings.find(holding =>
+          (holding.ticker || '').toLowerCase() === subPart ||
+          (holding.name || '').toLowerCase().includes(subPart) ||
+          (holding.id || '').toLowerCase() === subPart
+        );
+        if (h) {
+          const hVal = h.currentValue || Math.round((parseFloat(h.shares) || 0) * (parseFloat(h.price) || 0) * 100) / 100;
+          return {
+            id: `holding_${parentAcc.id}_${h.ticker || h.id}`,
+            name: `${parentAcc.name} - ${h.ticker || h.name}`,
+            provider: parentAcc.provider,
+            type: h.assetClassLabel || 'Investimento Finanziario',
+            balance: hVal,
+            reconciledBalance: hVal,
+            isInvestment: true,
+            isBroker: true,
+            isHolding: true,
+            parentAccount: parentAcc
+          };
+        }
+      }
     }
 
     // 1. Exact match by id or name
@@ -2566,8 +2588,16 @@ class FinanceStore {
         } else {
           // Solo se non esiste alcuna chiusura salvata per il mese
           if (m.isCurrent) {
-            const liveAcc = this.findAccount(acc.name);
-            val = liveAcc ? (liveAcc.balance || 0) : 0;
+            const hasSubAccounts = candidateAccounts.some(ca => ca.name.toLowerCase().startsWith(acc.name.toLowerCase() + ' - '));
+            if (hasSubAccounts && !acc.name.includes(' - ')) {
+              // Se questo è il broker genitore (es. Trade Republic) e ci sono già le righe dei singoli ETF/holdings,
+              // la riga del broker genitore rappresenta ESCLUSIVAMENTE la liquidità di cassa non investita (cashBalance)
+              const liveAcc = this.findAccount(acc.name);
+              val = liveAcc ? (parseFloat(liveAcc.cashBalance) || 0) : 0;
+            } else {
+              const liveAcc = this.findAccount(acc.name);
+              val = liveAcc ? (liveAcc.balance || 0) : 0;
+            }
           } else if (m.isPast) {
             val = this.calculateAccountBalanceAtEndOfMonth(acc, m.monthKey);
           }
@@ -2645,12 +2675,18 @@ class FinanceStore {
     activeRows.forEach(row => {
       const nLow = (row.name || '').toLowerCase();
       const tLow = (row.type || '').toLowerCase();
+      const hasSubAccounts = activeRows.some(r => r.name.toLowerCase().startsWith(nLow + ' - '));
+
       if (row.isPension || nLow.includes('pensione') || tLow.includes('previden')) {
         pensionRows.push(row);
       } else if (row.isVoucher || row.id === 'buoni_pasto' || nLow.includes('buoni pasto') || nLow.includes('tiket')) {
         voucherRows.push(row);
       } else if (nLow.includes('btc') || nLow.includes('crypto') || nLow.includes('coinbase') || tLow.includes('crypto')) {
         cryptoRows.push(row);
+      } else if (hasSubAccounts && !nLow.includes(' - ')) {
+        // Se è il broker genitore (es. 'Trade Republic') con sottoconti specifici già presenti,
+        // funge da conto di cassa/liquidità e NON va duplicato nella macro-area investimenti
+        liquidRows.push(row);
       } else if (row.isInvestment || row.isBroker || nLow.includes('xeon') || nLow.includes('vwce') || nLow.includes('swda') || nLow.includes('xmme') || nLow.includes('sega') || nLow.includes('lyq3') || tLow.includes('etf') || tLow.includes('monetar') || tLow.includes('broker')) {
         investedRows.push(row);
       } else {
