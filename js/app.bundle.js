@@ -1714,16 +1714,12 @@ class FinanceStore {
       return true;
     });
 
-    // Auto-pulizia holdings ed ETF storici estinti/chiusi (es. iShares, SWDA, vecchie posizioni dismesse)
+    // Auto-pulizia holdings ed ETF storici estinti/chiusi (valore zero o dismessi)
     accs.forEach(a => {
       if ((a.isBroker || Array.isArray(a.holdings)) && Array.isArray(a.holdings)) {
         a.holdings = a.holdings.filter(h => {
-          const ticker = String(h.ticker || '').toUpperCase();
-          const name = String(h.name || '').toLowerCase();
-          if (name.includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI') {
-            return false;
-          }
-          return (parseFloat(h.currentValue) || 0) > 0 || ticker === 'XEON' || ticker === 'VWCE';
+          const val = parseFloat(h.currentValue) || 0;
+          return val > 0;
         });
       }
     });
@@ -1833,11 +1829,7 @@ class FinanceStore {
       if (a.id === 'trade_republic' || (a.name || '').toLowerCase() === 'trade republic') {
         if (a.cashBalance === 5 || a.cashBalance === 5.0) {
           a.cashBalance = 0.00;
-          if (Array.isArray(a.holdings) && a.holdings.length > 0) {
-            this.recalculateBrokerBalance(a);
-          } else {
-            a.balance = 10488.57;
-          }
+          this.recalculateBrokerBalance(a);
           a.reconciledBalance = a.balance;
         }
       }
@@ -2271,6 +2263,40 @@ class FinanceStore {
     this.accounts.forEach(acc => {
       if (acc.isBroker) {
         let latestBrokerDateInfo = null;
+
+        // Se le holdings sono assenti o vuote, scopre i sotto-asset dai saldi o dalle chiusure mensili
+        if (!Array.isArray(acc.holdings) || acc.holdings.length === 0) {
+          const latestClosing = this.monthlyClosings ? this.monthlyClosings[latestSaldiInfo?.monthKey || ''] : null;
+          const foundHoldings = [];
+
+          if (latestClosing && latestClosing.accounts) {
+            Object.entries(latestClosing.accounts).forEach(([k, v]) => {
+              if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
+                const ticker = k.split(' - ')[1].trim();
+                const spec = this.getAssetSpecification ? this.getAssetSpecification(ticker) : null;
+                const val = parseFloat(v) || 0;
+                if (val > 0) {
+                  foundHoldings.push({
+                    id: 'holding_' + ticker.toLowerCase(),
+                    ticker: ticker,
+                    isin: spec?.isin || '',
+                    name: spec?.name || ticker,
+                    assetClass: spec?.assetClass || 'azionario_globale',
+                    assetClassLabel: spec?.assetClassLabel || spec?.name || ticker,
+                    shares: spec?.price ? Math.round((val / spec.price) * 100) / 100 : 1,
+                    price: spec?.price || val,
+                    currentValue: val,
+                    color: spec?.color || '#0071E3'
+                  });
+                }
+              }
+            });
+          }
+          if (foundHoldings.length > 0) {
+            acc.holdings = foundHoldings;
+          }
+        }
+
         if (Array.isArray(acc.holdings)) {
           acc.holdings.forEach(h => {
             let latestHoldingRow = null;
@@ -2290,11 +2316,11 @@ class FinanceStore {
                 }
               }
             });
-            // Solo se l'holding è presente nell'ultimo conguaglio certificato ha saldo/valore attivo oggi
+            // Se l'holding è presente con riga dedicata nell'ultimo conguaglio certificato
             if (latestHoldingRow && latestHoldingRow.dInfo && latestHoldingRow.dInfo.monthKey === latestSaldiInfo?.monthKey) {
               const newBal = parseFloat(latestHoldingRow.s.balance) || 0;
               h.currentValue = newBal;
-              const refPrice = h.ticker === 'XEON' ? 144.08 : (h.ticker === 'VWCE' ? 124.62 : 100);
+              const refPrice = h.ticker === 'XEON' ? 144.08 : (h.ticker === 'VWCE' ? 124.62 : (parseFloat(h.price) || 100));
               const p = parseFloat(h.price) || refPrice;
               h.price = p;
               if (p > 0) h.shares = Math.round((newBal / p) * 100) / 100;
@@ -2305,6 +2331,16 @@ class FinanceStore {
               if (!latestBrokerDateInfo || latestHoldingTs >= latestBrokerDateInfo.timestamp) {
                 latestBrokerDateInfo = latestHoldingRow.dInfo;
               }
+            } else if (parseFloat(h.currentValue) > 0) {
+              // Preserva il valore già registrato se valido
+              const curVal = parseFloat(h.currentValue);
+              const refPrice = parseFloat(h.price) || (h.ticker === 'XEON' ? 144.08 : 124.62);
+              h.price = refPrice;
+              if (refPrice > 0) h.shares = Math.round((curVal / refPrice) * 100) / 100;
+              if (h.ticker === 'XEON') {
+                const emQuota = h.emergencyMonthsQuota || 5000;
+                h.safeInvestmentQuota = Math.max(0, Math.round((curVal - emQuota) * 100) / 100);
+              }
             } else {
               // Holding storica chiusa o liquidata nel passato (es. SWDA, XMME, SEGA, LYQ3)
               h.currentValue = 0;
@@ -2313,19 +2349,33 @@ class FinanceStore {
             }
           });
 
-          // Filtra definitivamente dai broker le holdings estinte a zero o chiuse nel passato
+          // Filtra definitivamente dai broker le holdings estinte a zero o dismesse nel passato
           acc.holdings = acc.holdings.filter(h => {
             const val = parseFloat(h.currentValue) || 0;
-            const ticker = String(h.ticker || '').toUpperCase();
-            const name = String(h.name || '').toLowerCase();
-            if (name.includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI') {
-              return false;
-            }
-            return val > 0 || ticker === 'XEON' || ticker === 'VWCE';
+            return val > 0;
           });
         }
         this.recalculateBrokerBalance(acc);
-        acc.reconciledBalance = acc.balance;
+
+        // Se le holdings non sono dettagliate ma la scheda Saldi contiene una riga consolidata per il broker:
+        if ((!acc.balance || acc.balance === 0) && (!acc.reconciledBalance || acc.reconciledBalance === 0)) {
+          const directRow = validSaldiRows.find(s => this._isMatchingAccount(s.name, acc));
+          if (directRow) {
+            const dBal = parseFloat(directRow.balance) || 0;
+            if (dBal > 0) {
+              acc.balance = dBal;
+              acc.reconciledBalance = dBal;
+              const dInfo = this._parseSheetDateInfo(directRow.date);
+              if (dInfo) {
+                acc.lastReconciledMonth = dInfo.monthKey;
+                acc.lastReconciledDate = dInfo.formattedDate;
+              }
+            }
+          }
+        } else {
+          acc.reconciledBalance = acc.balance;
+        }
+
         if (latestBrokerDateInfo) {
           acc.lastReconciledMonth = latestBrokerDateInfo.monthKey;
           acc.lastReconciledDate = latestBrokerDateInfo.formattedDate;
@@ -3575,32 +3625,28 @@ class FinanceStore {
       if (saved) closings = JSON.parse(saved);
     } catch (e) {}
 
-    const isCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
-
-    if (isCloudSynced) {
-      if (closings && typeof closings === 'object') {
-        Object.keys(closings).forEach(mKey => {
-          const mc = closings[mKey];
-          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
-            delete closings[mKey];
-          }
-        });
-      }
-      return closings || {};
-    }
-
-    // Integra con la baseline dei breakdown iniziali solo in modalità dimostrativa
-    if (!closings || Object.keys(closings).length === 0) {
-      closings = JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
-    } else {
-      Object.entries(INITIAL_MONTHLY_BREAKDOWNS || {}).forEach(([mKey, data]) => {
-        if (!closings[mKey]) {
-          closings[mKey] = JSON.parse(JSON.stringify(data));
+    // Pulisce vecchi residui demo corrotti se presenti
+    if (closings && typeof closings === 'object') {
+      Object.keys(closings).forEach(mKey => {
+        const mc = closings[mKey];
+        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
+          delete closings[mKey];
         }
       });
     }
 
-    return closings;
+    // Le chiusure storiche certificate da INITIAL_MONTHLY_BREAKDOWNS costituiscono la verità storica assoluta
+    const merged = JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
+    if (closings && typeof closings === 'object') {
+      Object.entries(closings).forEach(([mKey, data]) => {
+        // Se c'è una chiusura più recente (o personalizzata) non presente nei breakdown storici certificati, la include
+        if (!merged[mKey]) {
+          merged[mKey] = data;
+        }
+      });
+    }
+
+    return merged;
   }
 
   saveMonthlyClosings() {
@@ -3897,75 +3943,118 @@ class FinanceStore {
       });
     }
 
-    // Elenco conti raggruppati per macro-sezione
-    const accounts = this.getAccounts();
-    const liquidAccounts = [];
-    const voucherAccounts = [];
-    const investedAccounts = [];
-    const pensionAccounts = [];
-
-    accounts.forEach(acc => {
-      const nameLower = (acc.name || '').toLowerCase();
-      const typeLower = (acc.type || '').toLowerCase();
-      if (acc.isPension || nameLower.includes('pensione') || typeLower.includes('previden')) {
-        pensionAccounts.push(acc);
-      } else if (acc.isVoucher || acc.id === 'buoni_pasto' || nameLower.includes('buoni pasto')) {
-        voucherAccounts.push(acc);
-      } else if (acc.isInvestment || acc.isBroker || nameLower.includes('xeon') || nameLower.includes('vwce') || typeLower.includes('etf') || typeLower.includes('monetar') || typeLower.includes('sicurezza') || typeLower.includes('broker')) {
-        investedAccounts.push(acc);
-      } else {
-        liquidAccounts.push(acc);
+    // Elenco conti dell'anno: scopre dinamicamente i conti presenti nelle chiusure mensili dell'anno
+    const accountNamesInYear = new Set();
+    months.forEach(m => {
+      if (m.closing && m.closing.accounts && typeof m.closing.accounts === 'object') {
+        Object.keys(m.closing.accounts).forEach(k => {
+          if (k) accountNamesInYear.add(String(k).trim());
+        });
       }
+    });
+
+    // Se è l'anno corrente, include anche i conti vivi correnti
+    if (parseInt(yStr, 10) === curYear) {
+      this.getAccounts().forEach(a => {
+        if (a && a.name) accountNamesInYear.add(String(a.name).trim());
+      });
+    }
+
+    // Costruisce la lista di account spec per l'anno preservando i singoli asset/sottoconti
+    const candidateAccounts = [];
+    accountNamesInYear.forEach(accName => {
+      const spec = this._classifyAccountSpec(accName);
+      const isCrypto = accName.toLowerCase().includes('btc') || accName.toLowerCase().includes('coinbase') || spec.isCrypto;
+      candidateAccounts.push({
+        id: 'acc_' + accName.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+        name: accName,
+        type: spec.type,
+        isLiquid: !isCrypto && spec.isLiquid,
+        isVoucher: spec.isVoucher,
+        isInvestment: spec.isInvestment,
+        isBroker: spec.isBroker,
+        isPension: spec.isPension,
+        isCrypto: isCrypto
+      });
     });
 
     // Costruisce la riga per ciascun conto per i 12 mesi
     const buildAccountRow = (acc) => {
       const values = [];
+      let totalAnnualValue = 0;
       months.forEach(m => {
         let val = 0;
-        if (m.closing && m.closing.accounts) {
+        let foundInClosing = false;
+        if (m.closing && m.closing.accounts && typeof m.closing.accounts === 'object') {
           if (typeof m.closing.accounts[acc.name] !== 'undefined') {
             val = m.closing.accounts[acc.name];
+            foundInClosing = true;
           } else {
-            const matchKey = Object.keys(m.closing.accounts).find(k => this._isMatchingAccount(k, acc));
+            const matchKey = Object.keys(m.closing.accounts).find(k => k.trim().toLowerCase() === acc.name.trim().toLowerCase());
             if (matchKey) {
               val = m.closing.accounts[matchKey];
-            } else if (acc.isBroker) {
-              let brokerSubSum = 0;
-              let foundSub = false;
-              Object.entries(m.closing.accounts).forEach(([k, v]) => {
-                if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
-                  brokerSubSum += (parseFloat(v) || 0);
-                  foundSub = true;
-                }
-              });
-              if (foundSub) val = brokerSubSum;
+              foundInClosing = true;
             }
           }
-        }
-        if (val === 0) {
+          if (!foundInClosing) {
+            val = 0;
+          }
+        } else {
+          // Solo se non esiste alcuna chiusura salvata per il mese
           if (m.isCurrent) {
-            val = acc.balance;
+            const liveAcc = this.findAccount(acc.name);
+            val = liveAcc ? (liveAcc.balance || 0) : 0;
           } else if (m.isPast) {
             val = this.calculateAccountBalanceAtEndOfMonth(acc, m.monthKey);
           }
         }
-        values.push(Math.round(val * 100) / 100);
+        val = Math.round((parseFloat(val) || 0) * 100) / 100;
+        values.push(val);
+        totalAnnualValue += Math.abs(val);
       });
       return {
         id: acc.id,
         name: acc.name,
         type: acc.type,
-        values
+        isPension: acc.isPension,
+        isVoucher: acc.isVoucher,
+        isBroker: acc.isBroker,
+        isInvestment: acc.isInvestment,
+        isCrypto: acc.isCrypto,
+        values,
+        totalAnnualValue
       };
     };
 
-    const liquidRows = liquidAccounts.map(buildAccountRow);
-    const voucherRows = voucherAccounts.map(buildAccountRow);
-    const investedRows = investedAccounts.map(buildAccountRow);
-    const pensionRows = pensionAccounts.map(buildAccountRow);
+    const allRows = candidateAccounts.map(buildAccountRow);
 
-    // Calcolo subtotali mensili per ciascuna categoria
+    // REGOLA ZERO-RESIDUI: scarta i conti che hanno totalAnnualValue === 0
+    // (es. Fondo Pensione nel 2024, o BTC nel 2026, non appaiono in quegli anni)
+    const activeRows = allRows.filter(r => r.totalAnnualValue > 0);
+
+    const liquidRows = [];
+    const voucherRows = [];
+    const investedRows = [];
+    const cryptoRows = [];
+    const pensionRows = [];
+
+    activeRows.forEach(row => {
+      const nLow = (row.name || '').toLowerCase();
+      const tLow = (row.type || '').toLowerCase();
+      if (row.isPension || nLow.includes('pensione') || tLow.includes('previden')) {
+        pensionRows.push(row);
+      } else if (row.isVoucher || row.id === 'buoni_pasto' || nLow.includes('buoni pasto') || nLow.includes('tiket')) {
+        voucherRows.push(row);
+      } else if (nLow.includes('btc') || nLow.includes('crypto') || nLow.includes('coinbase') || tLow.includes('crypto')) {
+        cryptoRows.push(row);
+      } else if (row.isInvestment || row.isBroker || nLow.includes('xeon') || nLow.includes('vwce') || nLow.includes('swda') || nLow.includes('xmme') || nLow.includes('sega') || nLow.includes('lyq3') || tLow.includes('etf') || tLow.includes('monetar') || tLow.includes('broker')) {
+        investedRows.push(row);
+      } else {
+        liquidRows.push(row);
+      }
+    });
+
+    // Calcolo subtotali mensili per ciascuna macro-categoria
     const calcSubtotals = (rows) => {
       return months.map((_, idx) => {
         return Math.round(rows.reduce((sum, r) => sum + (r.values[idx] || 0), 0) * 100) / 100;
@@ -3975,13 +4064,13 @@ class FinanceStore {
     const liquidSubtotals = calcSubtotals(liquidRows);
     const voucherSubtotals = calcSubtotals(voucherRows);
     const investedSubtotals = calcSubtotals(investedRows);
+    const cryptoSubtotals = calcSubtotals(cryptoRows);
     const pensionSubtotals = calcSubtotals(pensionRows);
 
-    // Totale Patrimonio Netto Effettivo ("Zero Allucinazioni"): Esclude il Fondo Pensione
-    // Coerente al centesimo con la somma dei conti esposti nella tabella
+    // Totale Patrimonio Netto Effettivo (Disponibile + Investito + Buoni + Crypto, escluso Fondo Pensione)
     const effectiveNWValues = months.map((m, idx) => {
       const pendingEst = (m.isCurrent && curMonthPendingEstimatedIncome > 0) ? curMonthPendingEstimatedIncome : 0;
-      const effSum = liquidSubtotals[idx] + voucherSubtotals[idx] + investedSubtotals[idx] + pendingEst;
+      const effSum = liquidSubtotals[idx] + voucherSubtotals[idx] + investedSubtotals[idx] + cryptoSubtotals[idx] + pendingEst;
       return Math.round(effSum * 100) / 100;
     });
 
@@ -4006,7 +4095,7 @@ class FinanceStore {
           });
         }
         if (prevVal <= 0 && prevClosing?.totalNW) {
-          prevVal = prevClosing.totalNW * 0.72; // Stima scorporo se assente
+          prevVal = prevClosing.totalNW;
         }
         const curVal = effectiveNWValues[0];
         const diff = prevVal > 0 ? curVal - prevVal : 0;
@@ -4038,13 +4127,17 @@ class FinanceStore {
         accounts: liquidRows,
         subtotals: liquidSubtotals
       },
-      voucher: {
-        accounts: voucherRows,
-        subtotals: voucherSubtotals
-      },
       invested: {
         accounts: investedRows,
         subtotals: investedSubtotals
+      },
+      crypto: {
+        accounts: cryptoRows,
+        subtotals: cryptoSubtotals
+      },
+      voucher: {
+        accounts: voucherRows,
+        subtotals: voucherSubtotals
       },
       pension: {
         accounts: pensionRows,
@@ -4371,16 +4464,8 @@ class FinanceStore {
 
       const first = knownIndices[0];
       if (targetIdx < first.idx) {
-        const monthsDiff = first.idx - targetIdx;
-        let rate = monthlyContribution;
-        if (knownIndices.length > 1) {
-          const last = knownIndices[knownIndices.length - 1];
-          const span = last.idx - first.idx;
-          if (span > 0) {
-            rate = Math.max(50, (last.val - first.val) / span);
-          }
-        }
-        return Math.max(500, Math.round((first.val - (monthsDiff * rate)) * 100) / 100);
+        // Se il mese è precedente all'apertura del fondo pensione (10/2025), il valore è rigorosamente 0.00 €
+        return 0;
       }
 
       const last = knownIndices[knownIndices.length - 1];
@@ -14754,11 +14839,13 @@ class StoricoView {
                 const liquidVal = matrix.liquid.subtotals[idx] || 0;
                 const voucherVal = matrix.voucher.subtotals[idx] || 0;
                 const investedVal = matrix.invested.subtotals[idx] || 0;
+                const cryptoVal = (matrix.crypto && matrix.crypto.subtotals[idx]) || 0;
 
                 const mTot = effNW || 1;
                 const mPctLiq = Math.max(2, Math.round((liquidVal / mTot) * 100));
                 const mPctInv = Math.max(2, Math.round((investedVal / mTot) * 100));
-                const mPctVou = Math.max(2, 100 - mPctLiq - mPctInv);
+                const mPctCry = cryptoVal > 0 ? Math.max(2, Math.round((cryptoVal / mTot) * 100)) : 0;
+                const mPctVou = Math.max(2, 100 - mPctLiq - mPctInv - mPctCry);
 
                 return `
                   <div class="card storico-month-workout-card">
@@ -14800,23 +14887,34 @@ class StoricoView {
                     <div class="alloc-bar-track" style="height: 5px; margin: 8px 0 6px;">
                       <div class="alloc-segment seg-liquid" style="width: ${mPctLiq}%;"></div>
                       <div class="alloc-segment seg-invested" style="width: ${mPctInv}%;"></div>
+                      ${cryptoVal > 0 ? `<div class="alloc-segment seg-crypto" style="width: ${mPctCry}%; background: #F7931A;"></div>` : ''}
                       <div class="alloc-segment seg-voucher" style="width: ${mPctVou}%;"></div>
                     </div>
 
-                    <!-- Breakdown rapido a 3 voci -->
+                    <!-- Breakdown rapido a 3-4 voci -->
                     <div class="alloc-legend" style="padding-top: 2px;">
                       <div class="legend-col">
                         <span class="legend-name">Liquidità</span>
                         <span class="privacy-mask legend-amount" style="color: var(--apple-blue); font-size: 12px;">${this.formatCurrency(liquidVal)}</span>
                       </div>
-                      <div class="legend-col">
-                        <span class="legend-name">Trade Rep.</span>
-                        <span class="privacy-mask legend-amount" style="color: var(--apple-purple); font-size: 12px;">${this.formatCurrency(investedVal)}</span>
-                      </div>
-                      <div class="legend-col">
-                        <span class="legend-name">Buoni</span>
-                        <span class="privacy-mask legend-amount" style="color: var(--apple-orange); font-size: 12px;">${this.formatCurrency(voucherVal)}</span>
-                      </div>
+                      ${investedVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Investiti</span>
+                          <span class="privacy-mask legend-amount" style="color: var(--apple-purple); font-size: 12px;">${this.formatCurrency(investedVal)}</span>
+                        </div>
+                      ` : ''}
+                      ${cryptoVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Crypto</span>
+                          <span class="privacy-mask legend-amount" style="color: #F7931A; font-size: 12px;">${this.formatCurrency(cryptoVal)}</span>
+                        </div>
+                      ` : ''}
+                      ${voucherVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Buoni</span>
+                          <span class="privacy-mask legend-amount" style="color: var(--apple-orange); font-size: 12px;">${this.formatCurrency(voucherVal)}</span>
+                        </div>
+                      ` : ''}
                     </div>
                   </div>
                 `;
@@ -14880,47 +14978,67 @@ class StoricoView {
                 </tr>
               </thead>
               <tbody>
-                <tr style="background: var(--bg-hover); font-weight: 700;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Liquidità Corrente</td>
-                </tr>
-                ${matrix.liquid.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px;">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.liquid && matrix.liquid.accounts.length > 0 ? `
+                  <tr style="background: var(--bg-hover); font-weight: 700;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Liquidità Corrente</td>
                   </tr>
-                `).join('')}
+                  ${matrix.liquid.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
-                <tr style="background: var(--bg-hover); font-weight: 700;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Investimenti &amp; Broker (Trade Republic)</td>
-                </tr>
-                ${matrix.invested.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px;">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.invested && matrix.invested.accounts.length > 0 ? `
+                  <tr style="background: var(--bg-hover); font-weight: 700;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Investimenti &amp; Broker</td>
                   </tr>
-                `).join('')}
+                  ${matrix.invested.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
-                <tr style="background: var(--bg-hover); font-weight: 700;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Buoni Pasto &amp; Benefit</td>
-                </tr>
-                ${matrix.voucher.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px;">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.crypto && matrix.crypto.accounts.length > 0 ? `
+                  <tr style="background: rgba(247, 147, 26, 0.08); font-weight: 700; color: #F7931A;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #F7931A;">🪙 Criptovalute &amp; Digital Assets</td>
                   </tr>
-                `).join('')}
+                  ${matrix.crypto.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
-                <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">
-                    🛡️ Previdenza Complementare (Fondo Pensione)
-                  </td>
-                </tr>
-                ${matrix.pension.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px; color: var(--text-primary);">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums; color: #AF52DE; font-weight: 600;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.voucher && matrix.voucher.accounts.length > 0 ? `
+                  <tr style="background: var(--bg-hover); font-weight: 700;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Buoni Pasto &amp; Benefit</td>
                   </tr>
-                `).join('')}
+                  ${matrix.voucher.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
+
+                ${matrix.pension && matrix.pension.accounts.length > 0 ? `
+                  <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">
+                      🛡️ Previdenza Complementare (Fondo Pensione)
+                    </td>
+                  </tr>
+                  ${matrix.pension.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px; color: var(--text-primary);">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums; color: #AF52DE; font-weight: 600;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
                 ${matrix.totals.pendingEstimatedIncome > 0 ? `
                   <tr style="border-bottom: 1px solid var(--border-subtle); color: var(--apple-blue); font-style: italic; background: rgba(0, 113, 227, 0.04);">

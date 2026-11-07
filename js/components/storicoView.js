@@ -237,11 +237,13 @@ export class StoricoView {
                 const liquidVal = matrix.liquid.subtotals[idx] || 0;
                 const voucherVal = matrix.voucher.subtotals[idx] || 0;
                 const investedVal = matrix.invested.subtotals[idx] || 0;
+                const cryptoVal = (matrix.crypto && matrix.crypto.subtotals[idx]) || 0;
 
                 const mTot = effNW || 1;
                 const mPctLiq = Math.max(2, Math.round((liquidVal / mTot) * 100));
                 const mPctInv = Math.max(2, Math.round((investedVal / mTot) * 100));
-                const mPctVou = Math.max(2, 100 - mPctLiq - mPctInv);
+                const mPctCry = cryptoVal > 0 ? Math.max(2, Math.round((cryptoVal / mTot) * 100)) : 0;
+                const mPctVou = Math.max(2, 100 - mPctLiq - mPctInv - mPctCry);
 
                 return `
                   <div class="card storico-month-workout-card">
@@ -283,23 +285,34 @@ export class StoricoView {
                     <div class="alloc-bar-track" style="height: 5px; margin: 8px 0 6px;">
                       <div class="alloc-segment seg-liquid" style="width: ${mPctLiq}%;"></div>
                       <div class="alloc-segment seg-invested" style="width: ${mPctInv}%;"></div>
+                      ${cryptoVal > 0 ? `<div class="alloc-segment seg-crypto" style="width: ${mPctCry}%; background: #F7931A;"></div>` : ''}
                       <div class="alloc-segment seg-voucher" style="width: ${mPctVou}%;"></div>
                     </div>
 
-                    <!-- Breakdown rapido a 3 voci -->
+                    <!-- Breakdown rapido a 3-4 voci -->
                     <div class="alloc-legend" style="padding-top: 2px;">
                       <div class="legend-col">
                         <span class="legend-name">Liquidità</span>
                         <span class="privacy-mask legend-amount" style="color: var(--apple-blue); font-size: 12px;">${this.formatCurrency(liquidVal)}</span>
                       </div>
-                      <div class="legend-col">
-                        <span class="legend-name">Trade Rep.</span>
-                        <span class="privacy-mask legend-amount" style="color: var(--apple-purple); font-size: 12px;">${this.formatCurrency(investedVal)}</span>
-                      </div>
-                      <div class="legend-col">
-                        <span class="legend-name">Buoni</span>
-                        <span class="privacy-mask legend-amount" style="color: var(--apple-orange); font-size: 12px;">${this.formatCurrency(voucherVal)}</span>
-                      </div>
+                      ${investedVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Investiti</span>
+                          <span class="privacy-mask legend-amount" style="color: var(--apple-purple); font-size: 12px;">${this.formatCurrency(investedVal)}</span>
+                        </div>
+                      ` : ''}
+                      ${cryptoVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Crypto</span>
+                          <span class="privacy-mask legend-amount" style="color: #F7931A; font-size: 12px;">${this.formatCurrency(cryptoVal)}</span>
+                        </div>
+                      ` : ''}
+                      ${voucherVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Buoni</span>
+                          <span class="privacy-mask legend-amount" style="color: var(--apple-orange); font-size: 12px;">${this.formatCurrency(voucherVal)}</span>
+                        </div>
+                      ` : ''}
                     </div>
                   </div>
                 `;
@@ -363,47 +376,67 @@ export class StoricoView {
                 </tr>
               </thead>
               <tbody>
-                <tr style="background: var(--bg-hover); font-weight: 700;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Liquidità Corrente</td>
-                </tr>
-                ${matrix.liquid.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px;">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.liquid && matrix.liquid.accounts.length > 0 ? `
+                  <tr style="background: var(--bg-hover); font-weight: 700;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Liquidità Corrente</td>
                   </tr>
-                `).join('')}
+                  ${matrix.liquid.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
-                <tr style="background: var(--bg-hover); font-weight: 700;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Investimenti &amp; Broker (Trade Republic)</td>
-                </tr>
-                ${matrix.invested.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px;">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.invested && matrix.invested.accounts.length > 0 ? `
+                  <tr style="background: var(--bg-hover); font-weight: 700;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Investimenti &amp; Broker</td>
                   </tr>
-                `).join('')}
+                  ${matrix.invested.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
-                <tr style="background: var(--bg-hover); font-weight: 700;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Buoni Pasto &amp; Benefit</td>
-                </tr>
-                ${matrix.voucher.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px;">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.crypto && matrix.crypto.accounts.length > 0 ? `
+                  <tr style="background: rgba(247, 147, 26, 0.08); font-weight: 700; color: #F7931A;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #F7931A;">🪙 Criptovalute &amp; Digital Assets</td>
                   </tr>
-                `).join('')}
+                  ${matrix.crypto.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
-                <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
-                  <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">
-                    🛡️ Previdenza Complementare (Fondo Pensione)
-                  </td>
-                </tr>
-                ${matrix.pension.accounts.map(acc => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle);">
-                    <td style="padding: 8px; color: var(--text-primary);">${acc.name}</td>
-                    ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums; color: #AF52DE; font-weight: 600;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                ${matrix.voucher && matrix.voucher.accounts.length > 0 ? `
+                  <tr style="background: var(--bg-hover); font-weight: 700;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px;">Buoni Pasto &amp; Benefit</td>
                   </tr>
-                `).join('')}
+                  ${matrix.voucher.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px;">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
+
+                ${matrix.pension && matrix.pension.accounts.length > 0 ? `
+                  <tr style="background: rgba(175, 82, 222, 0.08); font-weight: 700; color: #AF52DE;">
+                    <td colspan="${matrix.months.length + 1}" style="padding: 8px; color: #AF52DE;">
+                      🛡️ Previdenza Complementare (Fondo Pensione)
+                    </td>
+                  </tr>
+                  ${matrix.pension.accounts.map(acc => `
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                      <td style="padding: 8px; color: var(--text-primary);">${acc.name}</td>
+                      ${acc.values.map(v => `<td class="privacy-mask" style="padding: 8px; text-align: right; font-variant-numeric: tabular-nums; color: #AF52DE; font-weight: 600;">${v > 0 ? this.formatCurrency(v) : '-'}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                ` : ''}
 
                 ${matrix.totals.pendingEstimatedIncome > 0 ? `
                   <tr style="border-bottom: 1px solid var(--border-subtle); color: var(--apple-blue); font-style: italic; background: rgba(0, 113, 227, 0.04);">

@@ -26,7 +26,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.48 — Produzione Ufficiale `main`)
+## 📊 Stato Attuale dei Moduli (v2026.49 — Produzione Ufficiale `main`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -37,12 +37,21 @@
 | **Cloud Sync & Pairing** | 💎 SaldiAdapter & Ledger Multi-Anno | **Sincronizzazione Deterministica Mac ↔ iPhone**: Nuovo motore `SaldiAdapter` (`js/data/saldiAdapter.js`) che tratta la scheda `Saldi` come ledger temporale di conguagli certificati. Isolamento degli asset estinti/chiusi (saldo azzerato nei conti attivi ma conservato nello storico), riconciliazione automatica con i movimenti post-conguaglio, protezione del foglio storico in `Code.gs` e scansione LIFO sull'ultimo conguaglio. |
 | **Spese & Budget** | 💎 Regola 50/30/20 & Clean Lists | **Controllo Consumi Mensili**: Hero Card uscite del mese, micro-chart proporzionato per le buste 50/30/20 (Bisogni, Svago, Risparmio), ripartizione per categoria con icone vettoriali e classifica Top Fornitori senza linee divisorie invasive. |
 | **Investimenti & F.I.R.E.** | 💎 Multi-Asset Broker, PAC & 4% SWR | **Suite FinTech Completa**: Sotto-menu a 4 sezioni (`Portafoglio`, `Rischio`, `Obiettivi`, `F.I.R.E.`), gestione Broker multi-strumento con catalogo ETF/ISIN integrato, separazione Fondo Emergenza monetario vs crescita azionaria, ribilanciamento smart, simulatori PAC e indipendenza finanziaria. |
-| **Storico NW & Fiscale** | 💎 Multi-Anno, Fondo Pensione & Tabella Conti | **Evoluzione Patrimoniale & Riconciliazione Saldi/Movimenti**: Curva di crescita continua e liscia del Fondo Pensione dal 2024 ad oggi, rilevamento automatico multi-anno nello storico (`2024`, `2025`, `2026`), Tabella Conti completa con calcolo retroattivo a zero trattini `-`, integrazione sezione Previdenza Complementare e distinzione contabile netta tra Patrimonio Diretto e Patrimonio Totale. |
+| **Storico NW & Fiscale** | 💎 Multi-Anno, Fondo Pensione & Tabella Conti | **Evoluzione Patrimoniale Certificata 2024-2026**: Allineamento integrale al centesimo dai fogli originali dell'utente. Azzeramento completo della retroproiezione fittizia del Fondo Pensione a 500 € nel 2024 (il fondo pensione compare unicamente da Ottobre 2025). Matrice patrimoniale a 5 macro-aree con esclusione a zero-residui dei conti inattivi per ciascun anno. |
 | **Assistente Finanziario & Sicurezza** | 💎 CFO Locale + PIN & Face ID | **Analisi Zero-Latenza & WebAuthn**: Motore analitico locale istantaneo (con supporto opzionale API Gemini), Health Score 0-100, calcolo Financial Runway e sblocco protetto tramite PIN a 4 cifre e Face ID / Touch ID. |
 
 ---
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
+
+- **[RELEASE v2026.49] Allineamento Integrale Storico 2024-2026, Purga Totale Fondo Pensione 2024 & Matrice a 5 Macro-Aree**:
+  - **Allineamento Storico Ufficiale 2024-2026**: Integrati integralmente in `INITIAL_MONTHLY_BREAKDOWNS` e `INITIAL_HISTORICAL_NW` i 34 mesi certificati dai fogli originali forniti dall'utente (2024 da Gen a Dic, 2025 da Gen a Dic, 2026 da Gen a Set + conguaglio 31/10/2026 e movimenti vivi Novembre).
+  - **Eliminazione Radicale Fondo Pensione a 500 € nel 2024**: Purgata la formula di stima retroattiva `Math.max(500, ...)`. Se il mese è antecedente alla reale accensione della previdenza complementare (`10/2025`), il valore è rigorosamente `0.00 €`. Nel 2024 il Fondo Pensione non esiste e la relativa riga non compare.
+  - **Matrice Dinamica a 5 Macro-Aree con Regola Zero-Residui**: Riconoscimento distinto e indipendente per `Liquidità`, `Investimenti & Broker`, `🪙 Criptovalute & Digital Assets`, `Buoni Pasto & Benefit` e `🛡️ Previdenza Complementare`. I conti con valore totale pari a 0 nell'anno selezionato vengono esclusi dalla tabella dell'anno:
+    - **2024**: compaiono solo `BTC` e `Buddybank` (totale netto 2.419,02 € a fine anno).
+    - **2025**: compaiono `SWDA`, `XMME`, `SEGA`, `BTC`, `Buddybank`, `Contanti`, `Trade Republic`, `Salvadanaio`, `Fondo Pensione` (da Ottobre) e `Buoni Pasto` (da Novembre).
+    - **2026**: compaiono `Buddybank`, `Contanti`, `Trade Republic` (cassa), `Trade Republic - XEON`, `Trade Republic - VWCE`, `LYQ3`, `Fondo Pensione` e `Buoni Pasto`. Zero conti estinti.
+  - **Quadratura e Compilazione Bundle**: Validato con JavaScriptCore runtime a 0 errori (`js/app.bundle.js`).
 
 - **[MERGE MAIN - v2026.48] Architettura Deterministica T_max: Stato Vivo Esclusivo da Ultimo Conguaglio (31/10/2026) + Movimenti di Novembre**:
   - **Single Source of Truth Attuale ($T_{max}$)**: La situazione operativa ad oggi è generata **esclusivamente** dalle righe presenti nell'ultimo conguaglio certificato della scheda `Saldi` (`31/10/2026`), aggiornate con i soli movimenti effettivi registrati a Novembre 2026 ($T > 31/10/2026$).
