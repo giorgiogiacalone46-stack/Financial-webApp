@@ -1,0 +1,17 @@
+{
+  "name": "Finanze Personali",
+  "short_name": "Finanze",
+  "description": "Personal Finance Suite integrata con Google Sheets",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#0071E3",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

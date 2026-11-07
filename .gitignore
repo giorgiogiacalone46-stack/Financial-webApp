@@ -1,0 +1,7 @@
+.DS_Store
+*.log
+*.local.js
+*personal*
+*.backup.json
+finanze_backup_*.json
+

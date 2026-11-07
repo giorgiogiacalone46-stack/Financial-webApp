@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Finanze">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
+  <title>Finanze Personali</title>
+  
+  <!-- Apple Touch Icon & Manifest -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Apple Design System Styles -->
+  <link rel="stylesheet" href="css/apple-design.css?v=2026.44">
+</head>
+<body>
+
+  <!-- ============================================================
+       0. Schermata di Sblocco PIN Stile Apple (Opzionale)
+       ============================================================ -->
+  <div id="lock-screen-container" class="apple-lock-screen" style="display: none;">
+    <div class="lock-brand">
+      <div class="lock-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <h2>Finanze Personali</h2>
+      <p>Inserisci il PIN per accedere</p>
+    </div>
+
+    <div class="pin-dots-row">
+      <span class="pin-dot"></span>
+      <span class="pin-dot"></span>
+      <span class="pin-dot"></span>
+      <span class="pin-dot"></span>
+    </div>
+
+    <!-- Apple Quick Biometric Unlock Bar (Face ID / Touch ID) -->
+    <div class="biometric-quick-bar" id="lock-biometric-prompt" style="display: none; margin-bottom: 20px;">
+      <button class="apple-btn-secondary" id="btn-quick-biometric" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 9999px; font-size: 13.5px; font-weight: 500; background: rgba(255,255,255,0.12); color: #FFFFFF; border: 1px solid rgba(255,255,255,0.22); cursor: pointer; transition: background 0.15s ease;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M7 21H5a2 2 0 0 1-2-2v-2M17 21h2a2 2 0 0 0 2-2v-2"></path>
+          <path d="M9 9h.01M15 9h.01M10 13c.5.5 1.5.5 2 0M10 17c.5.5 3.5.5 4 0"></path>
+          <path d="M12 11v3"></path>
+        </svg>
+        <span>Sblocca con Face ID / Touch ID</span>
+      </button>
+    </div>
+
+    <div class="keypad-grid">
+      <button class="pin-key" data-val="1">1</button>
+      <button class="pin-key" data-val="2">2</button>
+      <button class="pin-key" data-val="3">3</button>
+      <button class="pin-key" data-val="4">4</button>
+      <button class="pin-key" data-val="5">5</button>
+      <button class="pin-key" data-val="6">6</button>
+      <button class="pin-key" data-val="7">7</button>
+      <button class="pin-key" data-val="8">8</button>
+      <button class="pin-key" data-val="9">9</button>
+      <button class="pin-key icon-key biometric-key" id="pin-key-biometric" data-val="biometric" title="Sblocca con Face ID o Touch ID" aria-label="Sblocca con Face ID o Touch ID" style="display: none;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M7 21H5a2 2 0 0 1-2-2v-2M17 21h2a2 2 0 0 0 2-2v-2"></path>
+          <path d="M9 9h.01M15 9h.01M10 13c.5.5 1.5.5 2 0M10 17c.5.5 3.5.5 4 0"></path>
+          <path d="M12 11v3"></path>
+        </svg>
+      </button>
+      <div class="pin-key empty" id="pin-key-empty-fallback"></div>
+      <button class="pin-key" data-val="0">0</button>
+      <button class="pin-key icon-key" data-val="back">⌫</button>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    
+    <!-- ============================================================
+         1. MacBook / Desktop Sidebar (Fixed Left)
+         ============================================================ -->
+    <aside class="sidebar">
+      
+      <!-- Brand Header -->
+      <div class="sidebar-header">
+        <div class="brand-wrapper">
+          <div class="brand-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1>Finanze</h1>
+            <span>Personal Suite</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation List -->
+      <nav class="sidebar-nav">
+        <span class="nav-section-title">Menu Principale</span>
+        
+        <!-- Dashboard -->
+        <button class="nav-item active" data-tab="dashboard">
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+              <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+              <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+            </svg>
+          </span>
+          <span>Dashboard</span>
+        </button>
+
+        <!-- Movimenti -->
+        <button class="nav-item" data-tab="movimenti">
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"></path>
+            </svg>
+          </span>
+          <span>Movimenti</span>
+        </button>
+
+        <!-- Spese & Budget -->
+        <button class="nav-item" data-tab="spese">
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+              <line x1="2" y1="10" x2="22" y2="10"></line>
+            </svg>
+          </span>
+          <span>Spese</span>
+        </button>
+
+        <!-- Investimenti -->
+        <button class="nav-item" data-tab="investimenti">
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+          </span>
+          <span>Investimenti</span>
+        </button>
+
+        <!-- Storico Patrimonio -->
+        <button class="nav-item" data-tab="storico">
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+          </span>
+          <span>Storico NW</span>
+        </button>
+
+        <span class="nav-section-title" style="margin-top: var(--space-box-gap-sm);">Analisi & Intelligenza</span>
+
+        <!-- Assistente AI -->
+        <button class="nav-item" data-tab="assistente">
+          <span class="icon" style="color: var(--apple-blue);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"></path>
+            </svg>
+          </span>
+          <span>Assistente</span>
+        </button>
+
+        <span class="nav-section-title" style="margin-top: var(--space-box-gap-sm);">Gestione</span>
+
+        <!-- Impostazioni & Configurazione -->
+        <button class="nav-item" data-tab="impostazioni">
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </span>
+          <span>Configurazione</span>
+        </button>
+      </nav>
+
+      <!-- Google Sheets Connection Status -->
+      <div class="sidebar-footer">
+        <div class="sheet-status-card" id="desktop-sheet-status-btn" role="button" tabindex="0" title="Apri stato sincronizzazione Google Sheets" style="cursor: pointer;">
+          <div class="sheet-status-indicator" title="Stato Google Sheets"></div>
+          <div class="sheet-status-info">
+            <span class="sheet-status-name">Finanze</span>
+            <span class="sheet-status-desc">Dati Locali</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ============================================================
+         2. Main Viewport Area
+         ============================================================ -->
+    <main class="main-wrapper">
+      
+      <!-- iPhone Top Bar (Mobile Only - Stile Workout /// Finanze) -->
+      <header class="mobile-top-bar">
+        <div class="mobile-brand">
+          <span class="brand-slash">///</span>
+          <h1 class="brand-title">Finanze</h1>
+        </div>
+        <div class="mobile-top-actions">
+          <button class="apple-btn-icon cloud-sync-btn" id="mobile-cloud-sync-btn" aria-label="Stato Cloud Google Sheets" title="Stato Cloud Google Sheets">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+            </svg>
+            <span class="cloud-sync-dot"></span>
+          </button>
+          <button class="apple-ai-header-btn" id="mobile-ai-btn" aria-label="Assistente Apple Intelligence" title="Assistente Apple Intelligence">
+            <span class="ai-glow-ring"></span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"></path>
+            </svg>
+          </button>
+          <button class="apple-btn-icon privacy-toggle-btn" id="mobile-privacy-toggle-btn" aria-label="Modalità Privacy" title="Modalità Privacy">
+            <svg class="icon-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="icon-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+          <button class="apple-btn-icon" id="mobile-settings-btn" aria-label="Configurazione & Impostazioni" title="Configurazione">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- MacBook / Desktop Header -->
+      <header class="main-header">
+        <div class="header-left">
+          <h2 class="view-title" id="view-title">Dashboard</h2>
+          <span class="view-subtitle" id="view-subtitle">Panoramica finanziaria e indicatori chiave</span>
+        </div>
+        <div class="header-right">
+          <button class="apple-ai-header-btn desktop-ai-btn" id="desktop-ai-btn" aria-label="Assistente Apple Intelligence" title="Assistente Apple Intelligence">
+            <span class="ai-glow-ring"></span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"></path>
+            </svg>
+            <span>Intelligence</span>
+          </button>
+          <button class="apple-btn-icon privacy-toggle-btn" id="privacy-toggle-btn" aria-label="Modalità Privacy" title="Attiva/Disattiva Modalità Privacy (Nascondi importi)">
+            <svg class="icon-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="icon-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+          <span class="date-pill" id="current-date">Oggi</span>
+        </div>
+      </header>
+
+      <!-- Active Content Container -->
+      <section class="main-content" id="main-viewport">
+        <!-- Rendered dynamically by app.js -->
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- ============================================================
+       3. iPhone Native Bottom Navigation Bar (Mobile Only - 5 Tab)
+       ============================================================ -->
+  <nav class="mobile-tab-bar">
+    <button class="mobile-tab-item active" data-tab="dashboard">
+      <div class="icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+          <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+          <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+        </svg>
+      </div>
+      <span>Home</span>
+    </button>
+
+    <button class="mobile-tab-item" data-tab="spese">
+      <div class="icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <line x1="2" y1="10" x2="22" y2="10"></line>
+        </svg>
+      </div>
+      <span>Spese</span>
+    </button>
+
+    <button class="mobile-tab-item" data-tab="movimenti">
+      <div class="icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"></path>
+        </svg>
+      </div>
+      <span>Movimenti</span>
+    </button>
+
+    <button class="mobile-tab-item" data-tab="investimenti">
+      <div class="icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+          <polyline points="16 7 22 7 22 13"></polyline>
+        </svg>
+      </div>
+      <span>Invest</span>
+    </button>
+
+    <button class="mobile-tab-item" data-tab="storico">
+      <div class="icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+      </div>
+      <span>Storico</span>
+    </button>
+  </nav>
+
+  <!-- Global Modal Root Container -->
+  <div id="modal-container"></div>
+
+  <!-- Chart.js Engine (Local) -->
+  <script src="js/vendor/chart.umd.min.js"></script>
+
+  <!-- Application Controller Script (ES Module + Fallback per apertura diretta file://) -->
+  <script type="module" src="js/app.js?v=2026.44"></script>
+  <script>
+    if (window.location.protocol === 'file:') {
+      var fallbackScript = document.createElement('script');
+      fallbackScript.src = 'js/app.bundle.js?v=2026.44';
+      document.body.appendChild(fallbackScript);
+    } else if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./service-worker.js').catch(function(err) {
+          console.log('SW registration note:', err.message);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
