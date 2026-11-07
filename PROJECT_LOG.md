@@ -26,7 +26,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.47 — Produzione Ufficiale `main`)
+## 📊 Stato Attuale dei Moduli (v2026.48 — Produzione Ufficiale `main`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -34,7 +34,7 @@
 | **Movimenti & Scheda Dettaglio** | 💎 Scroll Nativo & Tab Bar Retrattile | **Scroll-Lock iOS & Azioni Ergonomiche**: Modali a `z-index: 100000`, `body.modal-open` con blocco scroll sottostante, discesa automatica fluida della Bottom Tab Bar all'apertura dei fogli modali, momentum scrolling nativo e pulsante "Elimina Movimento" ben visibile in fondo al foglio. |
 | **Dashboard** | 💎 Hero Net Worth, Cash Flow & Conti | **Panoramica Esecutiva Completa**: Hero Card Patrimonio Effettivo con Segmented Allocation Bar, Flusso Mese a 4 pilastri / Micro-Chart Workout, CTA diretta `+ Nuovo Movimento` (`movimentiView.openModal()`), lista conti con pop-up di dettaglio e riepilogo entrate/uscite mensili. |
 | **Privacy & Database Demo** | 💎 Zero Dati Sensibili su GitHub | **Isolamento Totale dei Dati Personali**: Repository pubblico equipaggiato esclusivamente con `js/data/demoData.js` (conti, transazioni e saldi dimostrativi fittizi). I dati reali dell'utente si popolano unicamente sincronizzando il proprio foglio Google Sheets o importando un file di backup locale (`.gitignore` protegge `*.local.js` e `finanze_backup_*.json`). |
-| **Cloud Sync & Pairing** | 💎 Cloud Sync Hub & 1-Click Pairing | **Sincronizzazione Intelligente Mac ↔ iPhone**: Badge Cloud interattivo nell'header mobile e nella sidebar desktop, diagnostica automatica errori Apps Script (`/edit` → `/exec`, permessi *"Chiunque"*, verifica Token), auto-refresh silenzioso al ritorno sull'app (`visibilitychange`) e link di pairing rapido `#cloud-setup` per collegare l'iPhone in 1 tocco. |
+| **Cloud Sync & Pairing** | 💎 SaldiAdapter & Ledger Multi-Anno | **Sincronizzazione Deterministica Mac ↔ iPhone**: Nuovo motore `SaldiAdapter` (`js/data/saldiAdapter.js`) che tratta la scheda `Saldi` come ledger temporale di conguagli certificati. Isolamento degli asset estinti/chiusi (saldo azzerato nei conti attivi ma conservato nello storico), riconciliazione automatica con i movimenti post-conguaglio, protezione del foglio storico in `Code.gs` e scansione LIFO sull'ultimo conguaglio. |
 | **Spese & Budget** | 💎 Regola 50/30/20 & Clean Lists | **Controllo Consumi Mensili**: Hero Card uscite del mese, micro-chart proporzionato per le buste 50/30/20 (Bisogni, Svago, Risparmio), ripartizione per categoria con icone vettoriali e classifica Top Fornitori senza linee divisorie invasive. |
 | **Investimenti & F.I.R.E.** | 💎 Multi-Asset Broker, PAC & 4% SWR | **Suite FinTech Completa**: Sotto-menu a 4 sezioni (`Portafoglio`, `Rischio`, `Obiettivi`, `F.I.R.E.`), gestione Broker multi-strumento con catalogo ETF/ISIN integrato, separazione Fondo Emergenza monetario vs crescita azionaria, ribilanciamento smart, simulatori PAC e indipendenza finanziaria. |
 | **Storico NW & Fiscale** | 💎 Multi-Anno, Fondo Pensione & Tabella Conti | **Evoluzione Patrimoniale & Riconciliazione Saldi/Movimenti**: Curva di crescita continua e liscia del Fondo Pensione dal 2024 ad oggi, rilevamento automatico multi-anno nello storico (`2024`, `2025`, `2026`), Tabella Conti completa con calcolo retroattivo a zero trattini `-`, integrazione sezione Previdenza Complementare e distinzione contabile netta tra Patrimonio Diretto e Patrimonio Totale. |
@@ -43,6 +43,12 @@
 ---
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
+
+- **[MERGE MAIN - v2026.48] Motore Deterministico SaldiAdapter, Ledger Storico Multi-Anno & Protezione Scritture Apps Script**:
+  - **Architettura SaldiAdapter (`js/data/saldiAdapter.js`)**: Introdotto motore deterministico per interpretare la scheda `Saldi` come time-series ledger certificata (2024, 2025, 2026).
+  - **Isolamento Asset Estinti & Single Source of Truth**: L'ultimo conguaglio certificato ($T_{max}$) governa lo stato attivo attuale; conti o strumenti liquidati in passato (es. vecchi ETF o wallet dismessi) vengono archiviati con saldo attuale a zero e rimossi dai conti operativi, preservando la loro consistenza reale nei grafici storici.
+  - **Riconciliazione Movimenti Post-Conguaglio**: I saldi vivi odierni riflettono la somma algebrica della base certificata a $T_{max}$ più le transazioni registrate dopo il conguaglio.
+  - **Protezione Storico in Apps Script (`Code.gs`)**: Rimossa l'alterazione accidentale della prima riga nella scheda Saldi all'inserimento di un movimento; aggiornato il conguaglio esplicito tramite scansione bottom-up (LIFO) sull'ultimo record valido, garantendo l'integrità del ledger pregresso. [2026-11-07]
 
 - **[MERGE MAIN - v2026.47] Motore Storico Dinamico Multi-Anno: Riconciliazione Armonica Saldi e Movimenti & Curva Continua Fondo Pensione**:
   - **Integrazione Concettuale Saldi & Movimenti ("Dove mi trovo" vs "Come mi muovo")**: I conguagli della scheda `Saldi` costituiscono la verità contabile nei singoli momenti storici ("dove mi trovo"), mentre i `Movimenti` rappresentano il vettore di spostamento ("come mi sto muovendo"). Per i periodi con soli saldi (es. 2024), il sistema fotografa fedelmente le consistenze conguagliate; per i periodi con movimenti (2025/2026), calcola i saldi vivi ad oggi e retroattivamente a fine di ogni mese.
