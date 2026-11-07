@@ -64,9 +64,9 @@ export class StoricoView {
       ? pensionHistory
       : pensionHistory.filter(d => d.month.endsWith(this.selectedYear));
 
-    // Calcolo crescita patrimonio effettivo
-    const firstVal = filteredData.length > 0 ? filteredData[0].value : summary.effectiveNetWorth;
-    const lastVal = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : summary.effectiveNetWorth;
+    // Calcolo crescita patrimonio
+    const firstVal = filteredData.length > 0 ? filteredData[0].value : summary.netWorth;
+    const lastVal = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : summary.netWorth;
     const lastPoint = filteredData.length > 0 ? filteredData[filteredData.length - 1] : null;
     const hasPendingSalary = Boolean(lastPoint && lastPoint.isCurrent && lastPoint.pendingEstimatedIncome > 0);
     const pendingSalaryAmount = hasPendingSalary ? lastPoint.pendingEstimatedIncome : 0;
@@ -87,23 +87,24 @@ export class StoricoView {
     // Mesi invertiti per lista cronologica recente -> passato
     const monthsReversed = [...matrix.months].reverse().filter(m => m.hasData || m.isCurrent || (m.closing && m.closing.totalNW > 0));
 
-    const totalNW = summary.effectiveNetWorth || 1;
+    const totalNW = summary.netWorth || 1;
     const pctLiquid = Math.max(2, Math.round(((summary.liquidTotal || 0) / totalNW) * 100));
     const pctInvested = Math.max(2, Math.round(((summary.investedTotal || 0) / totalNW) * 100));
-    const pctVoucher = Math.max(2, 100 - pctLiquid - pctInvested);
+    const pctPension = Math.max(0, Math.round(((summary.pensionFundTotal || 0) / totalNW) * 100));
+    const pctVoucher = Math.max(2, Math.min(100, 100 - pctLiquid - pctInvested - pctPension));
 
     container.innerHTML = `
       <div class="page storico-page">
 
-        <!-- 1. Hero Card Patrimonio Effettivo Reale (Workout Monolithic Style) -->
+        <!-- 1. Hero Card Patrimonio Netto (Workout Monolithic Style) -->
         <section class="card hero-patrimonio-card storico-hero-card">
           <div class="hero-top-row">
             <div class="hero-title-group">
               <div class="hero-badge-row">
                 <span class="hero-title-label">
-                  Patrimonio Effettivo ${this.selectedYear === 'all' ? '• Storico' : `• ${this.selectedYear}`}
+                  Patrimonio Netto ${this.selectedYear === 'all' ? '• Storico' : `• ${this.selectedYear}`}
                 </span>
-                <span class="badge badge--positive hero-badge-tag">Disponibile &amp; Investito</span>
+                <span class="badge badge--positive hero-badge-tag">Complessivo</span>
                 ${hasPendingSalary ? `
                   <span class="badge badge--info hero-badge-tag" style="background: rgba(0, 113, 227, 0.12); color: var(--apple-blue); border: 1px solid rgba(0, 113, 227, 0.25);">
                     Incl. stima stipendio (+${this.formatCurrency(pendingSalaryAmount)})
@@ -115,7 +116,7 @@ export class StoricoView {
               </div>
               ${hasPendingSalary ? `
                 <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 3px;">
-                  Saldo attuale conti: <strong class="privacy-mask" style="color: var(--text-primary); font-weight: 600;">${this.formatCurrency(summary.effectiveNetWorth)}</strong>
+                  Saldo attuale conti: <strong class="privacy-mask" style="color: var(--text-primary); font-weight: 600;">${this.formatCurrency(summary.netWorth)}</strong>
                 </div>
               ` : ''}
             </div>
@@ -132,6 +133,7 @@ export class StoricoView {
           <div class="alloc-bar-track">
             <div class="alloc-segment seg-liquid" style="width: ${pctLiquid}%;" title="Liquidità: ${pctLiquid}%"></div>
             <div class="alloc-segment seg-invested" style="width: ${pctInvested}%;" title="Investiti: ${pctInvested}%"></div>
+            ${pctPension > 0 ? `<div class="alloc-segment seg-pension" style="width: ${pctPension}%; background: #AF52DE;" title="Previdenza: ${pctPension}%"></div>` : ''}
             <div class="alloc-segment seg-voucher" style="width: ${pctVoucher}%;" title="Buoni Pasto: ${pctVoucher}%"></div>
           </div>
 
@@ -157,6 +159,15 @@ export class StoricoView {
               </div>
               <span class="privacy-mask legend-amount" style="color: var(--apple-orange);">${this.formatCurrency(summary.voucherTotal || 0)}</span>
             </div>
+            ${summary.pensionFundTotal > 0 ? `
+              <div class="legend-col">
+                <div class="legend-label-row">
+                  <span class="dot-indicator" style="background: #AF52DE;"></span>
+                  <span class="legend-name">Pensione</span>
+                </div>
+                <span class="privacy-mask legend-amount" style="color: #AF52DE;">${this.formatCurrency(summary.pensionFundTotal)}</span>
+              </div>
+            ` : ''}
           </div>
 
           <!-- Toolbar Azioni & Selettore Anno a Tendina -->
@@ -229,7 +240,7 @@ export class StoricoView {
             <div class="storico-months-grid">
               ${monthsReversed.map((m) => {
                 const idx = m.monthNum - 1;
-                const effNW = matrix.totals.effectiveNetWorth[idx] || 0;
+                const totNW = matrix.totals.netWorth[idx] || 0;
                 const delta = matrix.totals.delta[idx] || 0;
                 const deltaPct = matrix.totals.deltaPct[idx] || '0.0';
                 const isPos = delta >= 0;
@@ -238,12 +249,14 @@ export class StoricoView {
                 const voucherVal = matrix.voucher.subtotals[idx] || 0;
                 const investedVal = matrix.invested.subtotals[idx] || 0;
                 const cryptoVal = (matrix.crypto && matrix.crypto.subtotals[idx]) || 0;
+                const pensionVal = (matrix.pension && matrix.pension.subtotals && matrix.pension.subtotals[idx]) || 0;
 
-                const mTot = effNW || 1;
+                const mTot = totNW || 1;
                 const mPctLiq = Math.max(2, Math.round((liquidVal / mTot) * 100));
                 const mPctInv = Math.max(2, Math.round((investedVal / mTot) * 100));
                 const mPctCry = cryptoVal > 0 ? Math.max(2, Math.round((cryptoVal / mTot) * 100)) : 0;
-                const mPctVou = Math.max(2, 100 - mPctLiq - mPctInv - mPctCry);
+                const mPctPen = pensionVal > 0 ? Math.max(2, Math.round((pensionVal / mTot) * 100)) : 0;
+                const mPctVou = Math.max(2, Math.min(100, 100 - mPctLiq - mPctInv - mPctCry - mPctPen));
 
                 return `
                   <div class="card storico-month-workout-card">
@@ -263,9 +276,9 @@ export class StoricoView {
 
                     <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px;">
                       <div>
-                        <span style="font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Patrimonio Effettivo</span>
+                        <span style="font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Patrimonio Netto</span>
                         <div class="privacy-mask" style="font-size: 23px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; letter-spacing: -0.025em;">
-                          ${this.formatCurrency(effNW)}
+                          ${this.formatCurrency(totNW)}
                         </div>
                         ${m.isCurrent && m.pendingEstimatedIncome > 0 ? `
                           <span style="font-size: 11px; color: var(--apple-blue); font-weight: 600; display: block; margin-top: 2px;">
@@ -286,10 +299,11 @@ export class StoricoView {
                       <div class="alloc-segment seg-liquid" style="width: ${mPctLiq}%;"></div>
                       <div class="alloc-segment seg-invested" style="width: ${mPctInv}%;"></div>
                       ${cryptoVal > 0 ? `<div class="alloc-segment seg-crypto" style="width: ${mPctCry}%; background: #F7931A;"></div>` : ''}
+                      ${pensionVal > 0 ? `<div class="alloc-segment seg-pension" style="width: ${mPctPen}%; background: #AF52DE;"></div>` : ''}
                       <div class="alloc-segment seg-voucher" style="width: ${mPctVou}%;"></div>
                     </div>
 
-                    <!-- Breakdown rapido a 3-4 voci -->
+                    <!-- Breakdown rapido a 3-5 voci -->
                     <div class="alloc-legend" style="padding-top: 2px;">
                       <div class="legend-col">
                         <span class="legend-name">Liquidità</span>
@@ -311,6 +325,12 @@ export class StoricoView {
                         <div class="legend-col">
                           <span class="legend-name">Buoni</span>
                           <span class="privacy-mask legend-amount" style="color: var(--apple-orange); font-size: 12px;">${this.formatCurrency(voucherVal)}</span>
+                        </div>
+                      ` : ''}
+                      ${pensionVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Pensione</span>
+                          <span class="privacy-mask legend-amount" style="color: #AF52DE; font-size: 12px;">${this.formatCurrency(pensionVal)}</span>
                         </div>
                       ` : ''}
                     </div>

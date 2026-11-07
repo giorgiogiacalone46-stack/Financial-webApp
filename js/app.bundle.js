@@ -4097,12 +4097,15 @@ class FinanceStore {
         pendingEstimatedIncome = Math.max(0, (liveAnalysis.effectiveIncome || 0) - (liveAnalysis.actualIncome || 0));
       }
     } catch (e) {}
-    const projectedNetWorth = Math.round((effectiveNetWorth + pendingEstimatedIncome) * 100) / 100;
+    const totalNetWorth = Math.round((effectiveNetWorth + pensionFundTotal) * 100) / 100;
+    const projectedNetWorth = Math.round((totalNetWorth + pendingEstimatedIncome) * 100) / 100;
 
     return {
-      totalBalance: effectiveNetWorth,
-      netWorth: effectiveNetWorth,
+      totalBalance: totalNetWorth,
+      netWorth: totalNetWorth,
+      totalNetWorth: totalNetWorth,
       effectiveNetWorth: effectiveNetWorth,
+      availableNetWorth: effectiveNetWorth,
       pendingEstimatedIncome: Math.round(pendingEstimatedIncome * 100) / 100,
       projectedNetWorth: projectedNetWorth,
       liquidTotal: liquidTotal,
@@ -4684,7 +4687,7 @@ class FinanceStore {
       return Math.round((effectiveNWValues[idx] + pensionSubtotals[idx]) * 100) / 100;
     });
 
-    // Calcolo variazioni mese su mese (€ e %) basate sul Patrimonio Netto Effettivo
+    // Calcolo variazioni mese su mese (€ e %) basate sul Net Worth Totale (conforme al foglio master)
     const deltaValues = [];
     const deltaPctValues = [];
     months.forEach((m, idx) => {
@@ -4692,24 +4695,26 @@ class FinanceStore {
         const prevYearMonth = `12/${parseInt(yStr, 10) - 1}`;
         const prevClosing = this.monthlyClosings ? this.monthlyClosings[prevYearMonth] : null;
         let prevVal = 0;
-        if (prevClosing && prevClosing.accounts) {
+        if (prevClosing && typeof prevClosing.totalNW === 'number' && prevClosing.totalNW > 0) {
+          prevVal = prevClosing.totalNW;
+        } else if (prevClosing && prevClosing.accounts) {
+          const keysLower = new Set(Object.keys(prevClosing.accounts).map(k => k.toLowerCase()));
           Object.entries(prevClosing.accounts).forEach(([name, bal]) => {
             const nLower = name.toLowerCase();
-            if (!nLower.includes('pensione') && !nLower.includes('previden')) {
-              prevVal += (parseFloat(bal) || 0);
+            if (nLower.includes(' - ')) {
+              const parent = nLower.split(' - ')[0].trim();
+              if (keysLower.has(parent)) return;
             }
+            prevVal += (parseFloat(bal) || 0);
           });
         }
-        if (prevVal <= 0 && prevClosing?.totalNW) {
-          prevVal = prevClosing.totalNW;
-        }
-        const curVal = effectiveNWValues[0];
+        const curVal = totalWithPensionValues[0];
         const diff = prevVal > 0 ? curVal - prevVal : 0;
         deltaValues.push(Math.round(diff * 100) / 100);
         deltaPctValues.push(prevVal > 0 ? ((diff / prevVal) * 100).toFixed(1) : '0.0');
       } else {
-        const prevVal = effectiveNWValues[idx - 1];
-        const curVal = effectiveNWValues[idx];
+        const prevVal = totalWithPensionValues[idx - 1];
+        const curVal = totalWithPensionValues[idx];
         if (curVal > 0 && prevVal > 0) {
           const diff = curVal - prevVal;
           deltaValues.push(Math.round(diff * 100) / 100);
@@ -4750,10 +4755,10 @@ class FinanceStore {
         subtotals: pensionSubtotals
       },
       totals: {
-        netWorth: effectiveNWValues,
+        netWorth: totalWithPensionValues,
+        totalWithPension: totalWithPensionValues,
         effectiveNetWorth: effectiveNWValues,
         pensionFund: pensionSubtotals,
-        totalWithPension: totalWithPensionValues,
         delta: deltaValues,
         deltaPct: deltaPctValues,
         netFlow: netFlowValues,
@@ -4793,34 +4798,33 @@ class FinanceStore {
     const nwMap = new Map();
     const isSnapshotMap = new Map();
 
-    const computeEffectiveFromAccountsMap = (accountsObj) => {
+    const computeTotalFromAccountsMap = (accountsObj) => {
       if (!accountsObj || typeof accountsObj !== 'object') return 0;
-      let eff = 0;
+      let tot = 0;
       const keysLower = new Set(Object.keys(accountsObj).map(k => k.toLowerCase()));
       Object.entries(accountsObj).forEach(([name, bal]) => {
         const nLower = name.toLowerCase();
-        if (nLower.includes('pensione') || nLower.includes('previden')) return;
-        if (nLower.includes('buoni pasto') || nLower.includes('ticket') || nLower.includes('tiket')) return;
         if (nLower.includes(' - ')) {
           const parentBroker = nLower.split(' - ')[0].trim();
           if (keysLower.has(parentBroker)) return;
         }
-        eff += (parseFloat(bal) || 0);
+        tot += (parseFloat(bal) || 0);
       });
-      return Math.round(eff * 100) / 100;
+      return Math.round(tot * 100) / 100;
     };
-
-    const pHistory = typeof this.getPensionHistory === 'function' ? this.getPensionHistory() : [];
-    const pMap = new Map();
-    pHistory.forEach(p => { if (p && p.month) pMap.set(p.month, p.value || 0); });
 
     baseHistorical.forEach(item => {
       const closing = this.monthlyClosings ? this.monthlyClosings[item.month] : null;
       if (closing) {
+        if (typeof closing.totalNW === 'number' && closing.totalNW > 0) {
+          nwMap.set(item.month, closing.totalNW);
+          isSnapshotMap.set(item.month, true);
+          return;
+        }
         if (closing.accounts) {
-          const eff = computeEffectiveFromAccountsMap(closing.accounts);
-          if (eff > 0) {
-            nwMap.set(item.month, eff);
+          const tot = computeTotalFromAccountsMap(closing.accounts);
+          if (tot > 0) {
+            nwMap.set(item.month, tot);
             isSnapshotMap.set(item.month, true);
             return;
           }
@@ -4831,19 +4835,22 @@ class FinanceStore {
           return;
         }
       }
-      const pVal = pMap.get(item.month) || 0;
-      const effVal = Math.max(0, item.value - pVal);
-      nwMap.set(item.month, Math.round(effVal * 100) / 100);
+      nwMap.set(item.month, Math.round(item.value * 100) / 100);
       isSnapshotMap.set(item.month, true);
     });
 
     if (this.monthlyClosings && typeof this.monthlyClosings === 'object') {
       Object.entries(this.monthlyClosings).forEach(([monthYear, closing]) => {
-        if (closing && closing.accounts) {
-          const eff = computeEffectiveFromAccountsMap(closing.accounts);
-          if (eff > 0) {
-            nwMap.set(monthYear, eff);
+        if (closing) {
+          if (typeof closing.totalNW === 'number' && closing.totalNW > 0) {
+            nwMap.set(monthYear, closing.totalNW);
             isSnapshotMap.set(monthYear, true);
+          } else if (closing.accounts) {
+            const tot = computeTotalFromAccountsMap(closing.accounts);
+            if (tot > 0) {
+              nwMap.set(monthYear, tot);
+              isSnapshotMap.set(monthYear, true);
+            }
           }
         }
       });
@@ -4851,15 +4858,6 @@ class FinanceStore {
 
     Object.entries(savedSnapshots).forEach(([monthYear, val]) => {
       if (typeof val === 'number' && val > 0) {
-        const closing = this.monthlyClosings ? this.monthlyClosings[monthYear] : null;
-        if (closing && closing.accounts) {
-          const eff = computeEffectiveFromAccountsMap(closing.accounts);
-          if (eff > 0) {
-            nwMap.set(monthYear, eff);
-            isSnapshotMap.set(monthYear, true);
-            return;
-          }
-        }
         nwMap.set(monthYear, val);
         isSnapshotMap.set(monthYear, true);
       }
@@ -4927,7 +4925,7 @@ class FinanceStore {
 
     const fullTimeline = [];
     const firstKey = `${String(startMonth).padStart(2, '0')}/${startYear}`;
-    let prevVal = nwMap.get(firstKey) || (baseHistorical.length > 0 ? baseHistorical[0].value : Math.max(0, this.summary.effectiveNetWorth));
+    let prevVal = nwMap.get(firstKey) || (baseHistorical.length > 0 ? baseHistorical[0].value : Math.max(0, this.summary.netWorth));
 
     let y = startYear;
     let m = startMonth;
@@ -4951,7 +4949,7 @@ class FinanceStore {
           const pendingEstimatedIncome = (liveAnalysis && liveAnalysis.isIncomeEstimated)
             ? Math.max(0, (liveAnalysis.effectiveIncome || 0) - (liveAnalysis.actualIncome || 0))
             : 0;
-          val = Math.round((this.summary.effectiveNetWorth + pendingEstimatedIncome) * 100) / 100;
+          val = Math.round((this.summary.netWorth + pendingEstimatedIncome) * 100) / 100;
         }
       } else if (nwMap.has(monthKey)) {
         val = nwMap.get(monthKey);
@@ -15289,9 +15287,9 @@ class StoricoView {
       ? pensionHistory
       : pensionHistory.filter(d => d.month.endsWith(this.selectedYear));
 
-    // Calcolo crescita patrimonio effettivo
-    const firstVal = filteredData.length > 0 ? filteredData[0].value : summary.effectiveNetWorth;
-    const lastVal = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : summary.effectiveNetWorth;
+    // Calcolo crescita patrimonio
+    const firstVal = filteredData.length > 0 ? filteredData[0].value : summary.netWorth;
+    const lastVal = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : summary.netWorth;
     const lastPoint = filteredData.length > 0 ? filteredData[filteredData.length - 1] : null;
     const hasPendingSalary = Boolean(lastPoint && lastPoint.isCurrent && lastPoint.pendingEstimatedIncome > 0);
     const pendingSalaryAmount = hasPendingSalary ? lastPoint.pendingEstimatedIncome : 0;
@@ -15312,23 +15310,24 @@ class StoricoView {
     // Mesi invertiti per lista cronologica recente -> passato
     const monthsReversed = [...matrix.months].reverse().filter(m => m.hasData || m.isCurrent || (m.closing && m.closing.totalNW > 0));
 
-    const totalNW = summary.effectiveNetWorth || 1;
+    const totalNW = summary.netWorth || 1;
     const pctLiquid = Math.max(2, Math.round(((summary.liquidTotal || 0) / totalNW) * 100));
     const pctInvested = Math.max(2, Math.round(((summary.investedTotal || 0) / totalNW) * 100));
-    const pctVoucher = Math.max(2, 100 - pctLiquid - pctInvested);
+    const pctPension = Math.max(0, Math.round(((summary.pensionFundTotal || 0) / totalNW) * 100));
+    const pctVoucher = Math.max(2, Math.min(100, 100 - pctLiquid - pctInvested - pctPension));
 
     container.innerHTML = `
       <div class="page storico-page">
 
-        <!-- 1. Hero Card Patrimonio Effettivo Reale (Workout Monolithic Style) -->
+        <!-- 1. Hero Card Patrimonio Netto (Workout Monolithic Style) -->
         <section class="card hero-patrimonio-card storico-hero-card">
           <div class="hero-top-row">
             <div class="hero-title-group">
               <div class="hero-badge-row">
                 <span class="hero-title-label">
-                  Patrimonio Effettivo ${this.selectedYear === 'all' ? '• Storico' : `• ${this.selectedYear}`}
+                  Patrimonio Netto ${this.selectedYear === 'all' ? '• Storico' : `• ${this.selectedYear}`}
                 </span>
-                <span class="badge badge--positive hero-badge-tag">Disponibile &amp; Investito</span>
+                <span class="badge badge--positive hero-badge-tag">Complessivo</span>
                 ${hasPendingSalary ? `
                   <span class="badge badge--info hero-badge-tag" style="background: rgba(0, 113, 227, 0.12); color: var(--apple-blue); border: 1px solid rgba(0, 113, 227, 0.25);">
                     Incl. stima stipendio (+${this.formatCurrency(pendingSalaryAmount)})
@@ -15340,7 +15339,7 @@ class StoricoView {
               </div>
               ${hasPendingSalary ? `
                 <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 3px;">
-                  Saldo attuale conti: <strong class="privacy-mask" style="color: var(--text-primary); font-weight: 600;">${this.formatCurrency(summary.effectiveNetWorth)}</strong>
+                  Saldo attuale conti: <strong class="privacy-mask" style="color: var(--text-primary); font-weight: 600;">${this.formatCurrency(summary.netWorth)}</strong>
                 </div>
               ` : ''}
             </div>
@@ -15357,6 +15356,7 @@ class StoricoView {
           <div class="alloc-bar-track">
             <div class="alloc-segment seg-liquid" style="width: ${pctLiquid}%;" title="Liquidità: ${pctLiquid}%"></div>
             <div class="alloc-segment seg-invested" style="width: ${pctInvested}%;" title="Investiti: ${pctInvested}%"></div>
+            ${pctPension > 0 ? `<div class="alloc-segment seg-pension" style="width: ${pctPension}%; background: #AF52DE;" title="Previdenza: ${pctPension}%"></div>` : ''}
             <div class="alloc-segment seg-voucher" style="width: ${pctVoucher}%;" title="Buoni Pasto: ${pctVoucher}%"></div>
           </div>
 
@@ -15382,6 +15382,15 @@ class StoricoView {
               </div>
               <span class="privacy-mask legend-amount" style="color: var(--apple-orange);">${this.formatCurrency(summary.voucherTotal || 0)}</span>
             </div>
+            ${summary.pensionFundTotal > 0 ? `
+              <div class="legend-col">
+                <div class="legend-label-row">
+                  <span class="dot-indicator" style="background: #AF52DE;"></span>
+                  <span class="legend-name">Pensione</span>
+                </div>
+                <span class="privacy-mask legend-amount" style="color: #AF52DE;">${this.formatCurrency(summary.pensionFundTotal)}</span>
+              </div>
+            ` : ''}
           </div>
 
           <!-- Toolbar Azioni & Selettore Anno a Tendina -->
@@ -15454,7 +15463,7 @@ class StoricoView {
             <div class="storico-months-grid">
               ${monthsReversed.map((m) => {
                 const idx = m.monthNum - 1;
-                const effNW = matrix.totals.effectiveNetWorth[idx] || 0;
+                const totNW = matrix.totals.netWorth[idx] || 0;
                 const delta = matrix.totals.delta[idx] || 0;
                 const deltaPct = matrix.totals.deltaPct[idx] || '0.0';
                 const isPos = delta >= 0;
@@ -15463,12 +15472,14 @@ class StoricoView {
                 const voucherVal = matrix.voucher.subtotals[idx] || 0;
                 const investedVal = matrix.invested.subtotals[idx] || 0;
                 const cryptoVal = (matrix.crypto && matrix.crypto.subtotals[idx]) || 0;
+                const pensionVal = (matrix.pension && matrix.pension.subtotals && matrix.pension.subtotals[idx]) || 0;
 
-                const mTot = effNW || 1;
+                const mTot = totNW || 1;
                 const mPctLiq = Math.max(2, Math.round((liquidVal / mTot) * 100));
                 const mPctInv = Math.max(2, Math.round((investedVal / mTot) * 100));
                 const mPctCry = cryptoVal > 0 ? Math.max(2, Math.round((cryptoVal / mTot) * 100)) : 0;
-                const mPctVou = Math.max(2, 100 - mPctLiq - mPctInv - mPctCry);
+                const mPctPen = pensionVal > 0 ? Math.max(2, Math.round((pensionVal / mTot) * 100)) : 0;
+                const mPctVou = Math.max(2, Math.min(100, 100 - mPctLiq - mPctInv - mPctCry - mPctPen));
 
                 return `
                   <div class="card storico-month-workout-card">
@@ -15488,9 +15499,9 @@ class StoricoView {
 
                     <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px;">
                       <div>
-                        <span style="font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Patrimonio Effettivo</span>
+                        <span style="font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Patrimonio Netto</span>
                         <div class="privacy-mask" style="font-size: 23px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; letter-spacing: -0.025em;">
-                          ${this.formatCurrency(effNW)}
+                          ${this.formatCurrency(totNW)}
                         </div>
                         ${m.isCurrent && m.pendingEstimatedIncome > 0 ? `
                           <span style="font-size: 11px; color: var(--apple-blue); font-weight: 600; display: block; margin-top: 2px;">
@@ -15511,10 +15522,11 @@ class StoricoView {
                       <div class="alloc-segment seg-liquid" style="width: ${mPctLiq}%;"></div>
                       <div class="alloc-segment seg-invested" style="width: ${mPctInv}%;"></div>
                       ${cryptoVal > 0 ? `<div class="alloc-segment seg-crypto" style="width: ${mPctCry}%; background: #F7931A;"></div>` : ''}
+                      ${pensionVal > 0 ? `<div class="alloc-segment seg-pension" style="width: ${mPctPen}%; background: #AF52DE;"></div>` : ''}
                       <div class="alloc-segment seg-voucher" style="width: ${mPctVou}%;"></div>
                     </div>
 
-                    <!-- Breakdown rapido a 3-4 voci -->
+                    <!-- Breakdown rapido a 3-5 voci -->
                     <div class="alloc-legend" style="padding-top: 2px;">
                       <div class="legend-col">
                         <span class="legend-name">Liquidità</span>
@@ -15536,6 +15548,12 @@ class StoricoView {
                         <div class="legend-col">
                           <span class="legend-name">Buoni</span>
                           <span class="privacy-mask legend-amount" style="color: var(--apple-orange); font-size: 12px;">${this.formatCurrency(voucherVal)}</span>
+                        </div>
+                      ` : ''}
+                      ${pensionVal > 0 ? `
+                        <div class="legend-col">
+                          <span class="legend-name">Pensione</span>
+                          <span class="privacy-mask legend-amount" style="color: #AF52DE; font-size: 12px;">${this.formatCurrency(pensionVal)}</span>
                         </div>
                       ` : ''}
                     </div>

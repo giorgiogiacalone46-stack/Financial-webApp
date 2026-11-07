@@ -2052,12 +2052,15 @@ class FinanceStore {
         pendingEstimatedIncome = Math.max(0, (liveAnalysis.effectiveIncome || 0) - (liveAnalysis.actualIncome || 0));
       }
     } catch (e) {}
-    const projectedNetWorth = Math.round((effectiveNetWorth + pendingEstimatedIncome) * 100) / 100;
+    const totalNetWorth = Math.round((effectiveNetWorth + pensionFundTotal) * 100) / 100;
+    const projectedNetWorth = Math.round((totalNetWorth + pendingEstimatedIncome) * 100) / 100;
 
     return {
-      totalBalance: effectiveNetWorth,
-      netWorth: effectiveNetWorth,
+      totalBalance: totalNetWorth,
+      netWorth: totalNetWorth,
+      totalNetWorth: totalNetWorth,
       effectiveNetWorth: effectiveNetWorth,
+      availableNetWorth: effectiveNetWorth,
       pendingEstimatedIncome: Math.round(pendingEstimatedIncome * 100) / 100,
       projectedNetWorth: projectedNetWorth,
       liquidTotal: liquidTotal,
@@ -2639,7 +2642,7 @@ class FinanceStore {
       return Math.round((effectiveNWValues[idx] + pensionSubtotals[idx]) * 100) / 100;
     });
 
-    // Calcolo variazioni mese su mese (€ e %) basate sul Patrimonio Netto Effettivo
+    // Calcolo variazioni mese su mese (€ e %) basate sul Net Worth Totale (conforme al foglio master)
     const deltaValues = [];
     const deltaPctValues = [];
     months.forEach((m, idx) => {
@@ -2647,24 +2650,26 @@ class FinanceStore {
         const prevYearMonth = `12/${parseInt(yStr, 10) - 1}`;
         const prevClosing = this.monthlyClosings ? this.monthlyClosings[prevYearMonth] : null;
         let prevVal = 0;
-        if (prevClosing && prevClosing.accounts) {
+        if (prevClosing && typeof prevClosing.totalNW === 'number' && prevClosing.totalNW > 0) {
+          prevVal = prevClosing.totalNW;
+        } else if (prevClosing && prevClosing.accounts) {
+          const keysLower = new Set(Object.keys(prevClosing.accounts).map(k => k.toLowerCase()));
           Object.entries(prevClosing.accounts).forEach(([name, bal]) => {
             const nLower = name.toLowerCase();
-            if (!nLower.includes('pensione') && !nLower.includes('previden')) {
-              prevVal += (parseFloat(bal) || 0);
+            if (nLower.includes(' - ')) {
+              const parent = nLower.split(' - ')[0].trim();
+              if (keysLower.has(parent)) return;
             }
+            prevVal += (parseFloat(bal) || 0);
           });
         }
-        if (prevVal <= 0 && prevClosing?.totalNW) {
-          prevVal = prevClosing.totalNW;
-        }
-        const curVal = effectiveNWValues[0];
+        const curVal = totalWithPensionValues[0];
         const diff = prevVal > 0 ? curVal - prevVal : 0;
         deltaValues.push(Math.round(diff * 100) / 100);
         deltaPctValues.push(prevVal > 0 ? ((diff / prevVal) * 100).toFixed(1) : '0.0');
       } else {
-        const prevVal = effectiveNWValues[idx - 1];
-        const curVal = effectiveNWValues[idx];
+        const prevVal = totalWithPensionValues[idx - 1];
+        const curVal = totalWithPensionValues[idx];
         if (curVal > 0 && prevVal > 0) {
           const diff = curVal - prevVal;
           deltaValues.push(Math.round(diff * 100) / 100);
@@ -2705,10 +2710,10 @@ class FinanceStore {
         subtotals: pensionSubtotals
       },
       totals: {
-        netWorth: effectiveNWValues,
+        netWorth: totalWithPensionValues,
+        totalWithPension: totalWithPensionValues,
         effectiveNetWorth: effectiveNWValues,
         pensionFund: pensionSubtotals,
-        totalWithPension: totalWithPensionValues,
         delta: deltaValues,
         deltaPct: deltaPctValues,
         netFlow: netFlowValues,
@@ -2748,34 +2753,33 @@ class FinanceStore {
     const nwMap = new Map();
     const isSnapshotMap = new Map();
 
-    const computeEffectiveFromAccountsMap = (accountsObj) => {
+    const computeTotalFromAccountsMap = (accountsObj) => {
       if (!accountsObj || typeof accountsObj !== 'object') return 0;
-      let eff = 0;
+      let tot = 0;
       const keysLower = new Set(Object.keys(accountsObj).map(k => k.toLowerCase()));
       Object.entries(accountsObj).forEach(([name, bal]) => {
         const nLower = name.toLowerCase();
-        if (nLower.includes('pensione') || nLower.includes('previden')) return;
-        if (nLower.includes('buoni pasto') || nLower.includes('ticket') || nLower.includes('tiket')) return;
         if (nLower.includes(' - ')) {
           const parentBroker = nLower.split(' - ')[0].trim();
           if (keysLower.has(parentBroker)) return;
         }
-        eff += (parseFloat(bal) || 0);
+        tot += (parseFloat(bal) || 0);
       });
-      return Math.round(eff * 100) / 100;
+      return Math.round(tot * 100) / 100;
     };
-
-    const pHistory = typeof this.getPensionHistory === 'function' ? this.getPensionHistory() : [];
-    const pMap = new Map();
-    pHistory.forEach(p => { if (p && p.month) pMap.set(p.month, p.value || 0); });
 
     baseHistorical.forEach(item => {
       const closing = this.monthlyClosings ? this.monthlyClosings[item.month] : null;
       if (closing) {
+        if (typeof closing.totalNW === 'number' && closing.totalNW > 0) {
+          nwMap.set(item.month, closing.totalNW);
+          isSnapshotMap.set(item.month, true);
+          return;
+        }
         if (closing.accounts) {
-          const eff = computeEffectiveFromAccountsMap(closing.accounts);
-          if (eff > 0) {
-            nwMap.set(item.month, eff);
+          const tot = computeTotalFromAccountsMap(closing.accounts);
+          if (tot > 0) {
+            nwMap.set(item.month, tot);
             isSnapshotMap.set(item.month, true);
             return;
           }
@@ -2786,19 +2790,22 @@ class FinanceStore {
           return;
         }
       }
-      const pVal = pMap.get(item.month) || 0;
-      const effVal = Math.max(0, item.value - pVal);
-      nwMap.set(item.month, Math.round(effVal * 100) / 100);
+      nwMap.set(item.month, Math.round(item.value * 100) / 100);
       isSnapshotMap.set(item.month, true);
     });
 
     if (this.monthlyClosings && typeof this.monthlyClosings === 'object') {
       Object.entries(this.monthlyClosings).forEach(([monthYear, closing]) => {
-        if (closing && closing.accounts) {
-          const eff = computeEffectiveFromAccountsMap(closing.accounts);
-          if (eff > 0) {
-            nwMap.set(monthYear, eff);
+        if (closing) {
+          if (typeof closing.totalNW === 'number' && closing.totalNW > 0) {
+            nwMap.set(monthYear, closing.totalNW);
             isSnapshotMap.set(monthYear, true);
+          } else if (closing.accounts) {
+            const tot = computeTotalFromAccountsMap(closing.accounts);
+            if (tot > 0) {
+              nwMap.set(monthYear, tot);
+              isSnapshotMap.set(monthYear, true);
+            }
           }
         }
       });
@@ -2806,15 +2813,6 @@ class FinanceStore {
 
     Object.entries(savedSnapshots).forEach(([monthYear, val]) => {
       if (typeof val === 'number' && val > 0) {
-        const closing = this.monthlyClosings ? this.monthlyClosings[monthYear] : null;
-        if (closing && closing.accounts) {
-          const eff = computeEffectiveFromAccountsMap(closing.accounts);
-          if (eff > 0) {
-            nwMap.set(monthYear, eff);
-            isSnapshotMap.set(monthYear, true);
-            return;
-          }
-        }
         nwMap.set(monthYear, val);
         isSnapshotMap.set(monthYear, true);
       }
@@ -2882,7 +2880,7 @@ class FinanceStore {
 
     const fullTimeline = [];
     const firstKey = `${String(startMonth).padStart(2, '0')}/${startYear}`;
-    let prevVal = nwMap.get(firstKey) || (baseHistorical.length > 0 ? baseHistorical[0].value : Math.max(0, this.summary.effectiveNetWorth));
+    let prevVal = nwMap.get(firstKey) || (baseHistorical.length > 0 ? baseHistorical[0].value : Math.max(0, this.summary.netWorth));
 
     let y = startYear;
     let m = startMonth;
@@ -2906,7 +2904,7 @@ class FinanceStore {
           const pendingEstimatedIncome = (liveAnalysis && liveAnalysis.isIncomeEstimated)
             ? Math.max(0, (liveAnalysis.effectiveIncome || 0) - (liveAnalysis.actualIncome || 0))
             : 0;
-          val = Math.round((this.summary.effectiveNetWorth + pendingEstimatedIncome) * 100) / 100;
+          val = Math.round((this.summary.netWorth + pendingEstimatedIncome) * 100) / 100;
         }
       } else if (nwMap.has(monthKey)) {
         val = nwMap.get(monthKey);
