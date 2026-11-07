@@ -232,15 +232,7 @@ class AppController {
 
   applyCloudData(data) {
     if (!data) return;
-    let updated = false;
-    if (data.transactions && Array.isArray(data.transactions) && data.transactions.length > 0) {
-      financeStore.setTransactions(data.transactions);
-      updated = true;
-    }
-    if (data.saldi && Array.isArray(data.saldi) && data.saldi.length > 0) {
-      const saldiChanged = financeStore.syncSaldiFromCloud(data.saldi);
-      if (saldiChanged) updated = true;
-    }
+    const updated = financeStore.syncCloudData(data);
     if (updated) {
       const container = document.getElementById('main-viewport');
       if (!container) return;

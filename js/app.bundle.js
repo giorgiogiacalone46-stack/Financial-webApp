@@ -1193,7 +1193,8 @@ const STORAGE_KEYS = {
   SMART_RULES: 'finanze_smart_rules',
   NW_SNAPSHOTS: 'finanze_nw_snapshots',
   MONTHLY_CLOSINGS: 'finanze_monthly_closings_v1',
-  SALARY_CONFIG: 'finanze_salary_config'
+  SALARY_CONFIG: 'finanze_salary_config',
+  CLOUD_SYNCED: 'finanze_cloud_synced_v1'
 };
 
 class FinanceStore {
@@ -1489,92 +1490,517 @@ class FinanceStore {
     return accs;
   }
 
-  syncSaldiFromCloud(saldiList) {
-    if (!Array.isArray(saldiList) || saldiList.length === 0) return false;
-    let anyChanged = false;
+  _slugifyAccountId(name) {
+    const clean = String(name || '').trim().toLowerCase();
+    if (!clean) return 'acc_' + Date.now();
+    if (clean === 'buddybank' || clean.includes('buddybank')) return 'buddybank';
+    if (clean === 'trade republic' || clean.startsWith('trade republic')) return 'trade_republic';
+    if (clean.includes('pensione') || clean.includes('previden')) return 'pensione';
+    if (clean === 'contanti' || clean === 'cash') return 'contanti';
+    if (clean.includes('buoni pasto') || clean.includes('ticket') || clean.includes('tiket')) return 'buoni_pasto';
+    return clean.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || ('acc_' + Date.now());
+  }
 
-    saldiList.forEach(s => {
-      if (!s || !s.name) return;
-      const acc = this.findAccount(s.name);
-      if (!acc) return;
+  _parseSheetDateInfo(dateRaw) {
+    if (!dateRaw) return null;
+    const dateStr = String(dateRaw).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('T')[0].split('-');
+      const ts = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10)).getTime();
+      return {
+        formattedDate: `${d}/${m}/${y}`,
+        monthKey: `${m}/${y}`,
+        timestamp: ts
+      };
+    }
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dateStr)) {
+      const parts = dateStr.split('/');
+      const d = parts[0].padStart(2, '0');
+      const m = parts[1].padStart(2, '0');
+      const y = parts[2];
+      const ts = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10)).getTime();
+      return {
+        formattedDate: `${d}/${m}/${y}`,
+        monthKey: `${m}/${y}`,
+        timestamp: ts
+      };
+    }
+    return null;
+  }
 
-      const sNameLower = s.name.toLowerCase();
+  _classifyAccountSpec(rawName, rawType = '') {
+    const accId = this._slugifyAccountId(rawName);
+    const nameLower = String(rawName || '').trim().toLowerCase();
+    const typeLower = String(rawType || '').trim().toLowerCase();
 
-      // Se l'account è un broker con holdings e la riga fa riferimento a un holding specifico (es. XEON o VWCE)
-      if (acc.isBroker && Array.isArray(acc.holdings) && acc.holdings.length > 0) {
-        let targetHolding = null;
-        if (sNameLower.includes('xeon')) {
-          targetHolding = acc.holdings.find(h => (h.ticker || '').toUpperCase() === 'XEON' || (h.name || '').toUpperCase().includes('XEON'));
-        } else if (sNameLower.includes('vwce')) {
-          targetHolding = acc.holdings.find(h => (h.ticker || '').toUpperCase() === 'VWCE' || (h.name || '').toUpperCase().includes('VWCE'));
-        }
+    const isPension = accId === 'pensione' || nameLower.includes('pension') || nameLower.includes('previden') || typeLower.includes('pension') || typeLower.includes('previden');
+    const isVoucher = accId === 'buoni_pasto' || nameLower.includes('buoni pasto') || nameLower.includes('ticket') || nameLower.includes('tiket') || typeLower.includes('buoni') || typeLower.includes('benefit');
+    const isBroker = accId === 'trade_republic' || nameLower.includes('directa') || nameLower.includes('degiro') || nameLower.includes('scalable') || typeLower.includes('broker') || typeLower.includes('invest') || typeLower.includes('etf');
+    const isInvestment = isBroker || typeLower.includes('sicurezza') || typeLower.includes('monetar') || typeLower.includes('azion');
+    const isLiquid = !isPension && !isVoucher && !isInvestment;
 
-        if (targetHolding) {
-          const newBal = parseFloat(s.balance);
-          if (!isNaN(newBal) && Math.abs((targetHolding.currentValue || 0) - newBal) > 0.001) {
-            targetHolding.currentValue = newBal;
-            this.recalculateBrokerBalance(acc);
-            anyChanged = true;
-          }
-        } else if (sNameLower === acc.name.toLowerCase() || sNameLower === acc.id.toLowerCase()) {
-          const oldRec = parseFloat(acc.reconciledBalance) || parseFloat(acc.balance) || 0;
-          const newBal = parseFloat(s.balance);
-          if (!isNaN(newBal) && Math.abs(oldRec - newBal) > 0.001) {
-            acc.reconciledBalance = newBal;
-            acc.balance = newBal;
-            anyChanged = true;
-          }
-        }
-      } else {
-        const oldRec = parseFloat(acc.reconciledBalance) || parseFloat(acc.balance) || 0;
-        const newBal = parseFloat(s.balance);
-        if (!isNaN(newBal) && Math.abs(oldRec - newBal) > 0.001) {
-          acc.reconciledBalance = newBal;
-          acc.balance = newBal;
-          anyChanged = true;
-        }
-      }
+    let provider = String(rawName || '').trim();
+    if (accId === 'trade_republic') provider = 'Trade Republic';
+    else if (accId === 'buddybank') provider = 'Buddybank';
+    else if (isVoucher) provider = 'Edenred / Pluxee';
+    else if (isPension) provider = 'Fondo Pensione';
+    else if (accId === 'contanti') provider = 'Contanti';
 
-      // Sincronizza con precisione la data e il mese di conguaglio dal foglio Saldi Google Sheets
-      if (s.date) {
-        let parsedMonth = null;
-        let formattedDate = null;
-        const dateStr = String(s.date).trim();
+    let defaultType = rawType || 'Liquidità corrente';
+    if (!rawType) {
+      if (isBroker) defaultType = 'Broker / Investimenti';
+      else if (isPension) defaultType = 'Previdenza complementare';
+      else if (isVoucher) defaultType = 'Buoni Pasto / Benefit';
+      else if (accId === 'contanti') defaultType = 'Liquidità contante';
+    }
 
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-          const [y, m, d] = dateStr.split('-');
-          parsedMonth = `${m}/${y}`;
-          formattedDate = `${d}/${m}/${y}`;
-        } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-          const [d, m, y] = dateStr.split('/');
-          parsedMonth = `${m}/${y}`;
-          formattedDate = `${d}/${m}/${y}`;
-        }
+    return { accId, provider, type: defaultType, isPension, isVoucher, isBroker, isInvestment, isLiquid };
+  }
 
-        if (parsedMonth && (acc.lastReconciledMonth !== parsedMonth || acc.lastReconciledDate !== formattedDate)) {
-          acc.lastReconciledMonth = parsedMonth;
-          acc.lastReconciledDate = formattedDate || acc.lastReconciledDate;
-          anyChanged = true;
-        }
+  /**
+   * Motore unificato di sincronizzazione Cloud (Google Sheets -> App Store):
+   * 1. Rimuove automaticamente i conti dimostrativi fittizi di demoData.js
+   * 2. Ricostruisce con i nomi esatti tutti i conti reali presenti in 'Saldi' e 'Movimenti'
+   * 3. Unifica gli asset broker (es. 'Trade Republic - XEON' + 'Trade Republic - VWCE') nel conto broker con holdings reali
+   * 4. Calcola al centesimo i saldi di conguaglio e i saldi vivi post-conguaglio (inclusi conti presenti solo in 'Movimenti' come Buoni Pasto)
+   */
+  syncCloudData(data) {
+    if (!data || typeof data !== 'object') return false;
+
+    const hasTransactions = Array.isArray(data.transactions) && data.transactions.length > 0;
+    const hasSaldi = Array.isArray(data.saldi) && data.saldi.length > 0;
+    if (!hasTransactions && !hasSaldi) return false;
+
+    const wasCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+
+    // 1. Normalizza e salva l'elenco movimenti ricevuto da Google Sheets
+    if (hasTransactions) {
+      this.transactions = data.transactions.map(t => {
+        const amount = typeof t.amount === 'number'
+          ? t.amount
+          : parseFloat(String(t.amount).replace(/€/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+        return {
+          ...t,
+          amount: Math.abs(amount)
+        };
+      });
+    }
+
+    // 2. Filtra righe riepilogative di 'Saldi' (es. TOTALE NET WORTH / TOTALE LIQUIDO & INVESTITO)
+    const validSaldiRows = hasSaldi
+      ? data.saldi.filter(s => {
+          if (!s || !s.name) return false;
+          const n = String(s.name).trim().toLowerCase();
+          const tp = String(s.type || '').trim().toLowerCase();
+          if (!n) return false;
+          if (n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)') return false;
+          if (tp.includes('patrimonio complessivo') || tp.includes('disponibilità diretta')) return false;
+          return true;
+        })
+      : [];
+
+    // Raccoglie tutti i nomi reali dei conti presenti nel foglio cloud (Saldi + Movimenti)
+    const cloudAccountNamesLower = new Set();
+    validSaldiRows.forEach(s => {
+      const raw = String(s.name).trim();
+      cloudAccountNamesLower.add(raw.toLowerCase());
+      if (raw.includes(' - ')) {
+        cloudAccountNamesLower.add(raw.split(' - ')[0].trim().toLowerCase());
       }
     });
-
-    if (anyChanged) {
-      this.recalculateLiveBalances();
-      this.saveAccounts();
-      // Aggiorna anche il breakdown del mese corrente se presente
-      const now = new Date();
-      const curMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-      if (this.monthlyClosings && this.monthlyClosings[curMonthKey]) {
-        const mc = this.monthlyClosings[curMonthKey];
-        this.accounts.forEach(a => {
-          mc.accounts[a.name] = a.balance;
+    if (Array.isArray(this.transactions)) {
+      this.transactions.forEach(t => {
+        [t.fromAccount, t.account, t.toAccount].forEach(accStr => {
+          if (!accStr) return;
+          const raw = String(accStr).trim();
+          if (!raw) return;
+          cloudAccountNamesLower.add(raw.toLowerCase());
+          if (raw.includes(' - ')) {
+            cloudAccountNamesLower.add(raw.split(' - ')[0].trim().toLowerCase());
+          }
         });
-        mc.totalNW = this.summary.netWorth;
-        this.saveMonthlyClosings();
-      }
+      });
     }
-    return anyChanged;
+
+    // 3. Rimozione automatica dei conti dimostrativi fittizi di demoData.js non presenti nel foglio reale
+    const DEMO_PLACEHOLDER_IDS = new Set(['conto_corrente', 'carta_spese', 'broker_investimenti']);
+    const DEMO_PLACEHOLDER_NAMES = new Set(['conto corrente', 'carta spese', 'portafoglio investimenti']);
+
+    this.accounts = (this.accounts || []).filter(a => {
+      const aNameLower = String(a.name || '').trim().toLowerCase();
+      const isDemoPlaceholder = DEMO_PLACEHOLDER_IDS.has(a.id) || DEMO_PLACEHOLDER_NAMES.has(aNameLower);
+      if (isDemoPlaceholder && !cloudAccountNamesLower.has(aNameLower)) {
+        return false;
+      }
+      return true;
+    });
+
+    // Se è il primo aggancio cloud (transizione da demoData -> foglio personale), azzera i saldi demo residui sui conti omonimi (Contanti, Buoni Pasto, Fondo Previdenza)
+    if (!wasCloudSynced) {
+      this.accounts.forEach(a => {
+        if (a.id === 'contanti' || a.id === 'buoni_pasto' || a.id === 'pensione') {
+          a.balance = 0;
+          a.reconciledBalance = 0;
+        }
+      });
+    }
+
+    // 4. Ricostruzione e allineamento conti dalla scheda 'Saldi'
+    const reconciledAccountIds = new Set();
+    let latestSaldiInfo = null;
+
+    validSaldiRows.forEach(s => {
+      const rawName = String(s.name || '').trim();
+      const rawType = String(s.type || '').trim();
+      const newBal = parseFloat(s.balance);
+      if (!rawName || isNaN(newBal)) return;
+
+      const dInfo = this._parseSheetDateInfo(s.date);
+      if (dInfo && (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp)) {
+        latestSaldiInfo = dInfo;
+      }
+
+      // Caso 4A: Riga sub-asset Broker (es. "Trade Republic - XEON", "Trade Republic - VWCE")
+      if (rawName.includes(' - ')) {
+        const parts = rawName.split(' - ');
+        const brokerName = parts[0].trim();
+        const assetPart = parts.slice(1).join(' - ').trim();
+        const brokerId = this._slugifyAccountId(brokerName);
+
+        let brokerAcc = this.accounts.find(a =>
+          a.id === brokerId || String(a.name || '').trim().toLowerCase() === brokerName.toLowerCase()
+        );
+
+        if (!brokerAcc) {
+          brokerAcc = {
+            id: brokerId,
+            name: brokerName,
+            provider: brokerName,
+            type: 'Broker / Investimenti',
+            balance: 0,
+            reconciledBalance: 0,
+            cashBalance: 0,
+            isLiquid: false,
+            isVoucher: false,
+            isInvestment: true,
+            isBroker: true,
+            isPension: false,
+            holdings: [],
+            lastReconciledMonth: dInfo?.monthKey || '10/2026',
+            lastReconciledDate: dInfo?.formattedDate || '31/10/2026',
+            defaultMode: 'balance'
+          };
+          this.accounts.push(brokerAcc);
+          this.addProvider(brokerName);
+        } else {
+          brokerAcc.name = brokerName;
+          brokerAcc.isBroker = true;
+          brokerAcc.isInvestment = true;
+          brokerAcc.isLiquid = false;
+          if (!Array.isArray(brokerAcc.holdings)) brokerAcc.holdings = [];
+          if (typeof brokerAcc.cashBalance === 'undefined') brokerAcc.cashBalance = 0;
+        }
+
+        const recognized = AssetCatalogService.lookupAsset(assetPart);
+        const ticker = String(recognized?.ticker || assetPart).trim().toUpperCase();
+        const refPrice = ticker === 'XEON' ? 144.08 : (ticker === 'VWCE' ? 124.62 : 100);
+
+        let targetHolding = brokerAcc.holdings.find(h =>
+          String(h.ticker || '').toUpperCase() === ticker ||
+          String(h.name || '').toLowerCase() === assetPart.toLowerCase()
+        );
+
+        if (!targetHolding) {
+          const isMonetario = ticker === 'XEON' || rawType.toLowerCase().includes('monetar') || rawType.toLowerCase().includes('emergenza') || rawType.toLowerCase().includes('sicurezza');
+          targetHolding = {
+            id: 'holding_' + ticker.toLowerCase().replace(/[^a-z0-9]/g, ''),
+            ticker,
+            isin: recognized?.isin || (ticker === 'XEON' ? 'LU0290358497' : (ticker === 'VWCE' ? 'IE00BK5BQT80' : '')),
+            name: recognized?.name || assetPart,
+            assetClass: recognized?.assetClass || (isMonetario ? 'monetario' : 'azionario_globale'),
+            assetClassLabel: recognized?.classLabel || rawType || (isMonetario ? 'Monetario / Liquidità Sicura' : 'Azionario Globale (All-World)'),
+            shares: refPrice > 0 ? Math.round((newBal / refPrice) * 100) / 100 : 0,
+            price: refPrice,
+            currentValue: newBal,
+            color: recognized?.color || (isMonetario ? '#34C759' : '#0071E3'),
+            emergencyMonthsQuota: ticker === 'XEON' ? Math.min(5000, newBal) : 0,
+            safeInvestmentQuota: ticker === 'XEON' ? Math.max(0, Math.round((newBal - 5000) * 100) / 100) : 0,
+            isPac: ticker === 'VWCE',
+            pacAmount: ticker === 'VWCE' ? 200 : 0
+          };
+          brokerAcc.holdings.push(targetHolding);
+        } else {
+          targetHolding.currentValue = newBal;
+          const p = parseFloat(targetHolding.price) || refPrice;
+          targetHolding.price = p;
+          if (p > 0) targetHolding.shares = Math.round((newBal / p) * 100) / 100;
+          if (ticker === 'XEON') {
+            const emQuota = targetHolding.emergencyMonthsQuota || 5000;
+            targetHolding.safeInvestmentQuota = Math.max(0, Math.round((newBal - emQuota) * 100) / 100);
+          }
+        }
+
+        this.recalculateBrokerBalance(brokerAcc);
+        brokerAcc.reconciledBalance = brokerAcc.balance;
+        if (dInfo) {
+          brokerAcc.lastReconciledMonth = dInfo.monthKey;
+          brokerAcc.lastReconciledDate = dInfo.formattedDate;
+        }
+        reconciledAccountIds.add(brokerAcc.id);
+        return;
+      }
+
+      // Caso 4B: Conto diretto (es. "Buddybank", "Contanti", "Fondo Pensione", "Buoni Pasto", "Trade Republic")
+      const spec = this._classifyAccountSpec(rawName, rawType);
+      let acc = this.accounts.find(a =>
+        a.id === spec.accId || String(a.name || '').trim().toLowerCase() === rawName.toLowerCase()
+      );
+
+      if (!acc) {
+        acc = {
+          id: spec.accId,
+          name: rawName,
+          provider: spec.provider,
+          type: spec.type,
+          balance: newBal,
+          reconciledBalance: newBal,
+          cashBalance: 0,
+          isLiquid: spec.isLiquid,
+          isVoucher: spec.isVoucher,
+          isInvestment: spec.isInvestment,
+          isBroker: spec.isBroker,
+          isPension: spec.isPension,
+          holdings: [],
+          lastReconciledMonth: dInfo?.monthKey || '10/2026',
+          lastReconciledDate: dInfo?.formattedDate || '31/10/2026',
+          defaultMode: spec.isPension ? 'delta' : 'balance'
+        };
+        this.accounts.push(acc);
+        this.addProvider(spec.provider);
+      } else {
+        acc.name = rawName;
+        acc.provider = spec.provider || acc.provider;
+        acc.type = rawType || acc.type || spec.type;
+        acc.isPension = spec.isPension;
+        acc.isVoucher = spec.isVoucher;
+        acc.isBroker = spec.isBroker || acc.isBroker;
+        acc.isInvestment = spec.isInvestment || acc.isInvestment;
+        acc.isLiquid = !acc.isPension && !acc.isVoucher && !acc.isInvestment;
+
+        if (!acc.isBroker || !Array.isArray(acc.holdings) || acc.holdings.length === 0) {
+          acc.reconciledBalance = newBal;
+          acc.balance = newBal;
+        } else if (!reconciledAccountIds.has(acc.id)) {
+          acc.reconciledBalance = newBal;
+          acc.balance = newBal;
+        }
+        if (dInfo) {
+          acc.lastReconciledMonth = dInfo.monthKey;
+          acc.lastReconciledDate = dInfo.formattedDate;
+        }
+      }
+      reconciledAccountIds.add(acc.id);
+    });
+
+    // 5. Scoperta automatica e riconciliazione conti presenti in 'Movimenti' ma non elencati in 'Saldi' (es. Buoni Pasto)
+    if (Array.isArray(this.transactions) && this.transactions.length > 0) {
+      this.transactions.forEach(t => {
+        [t.fromAccount, t.account, t.toAccount].forEach(rawAcc => {
+          if (!rawAcc) return;
+          let cleanName = String(rawAcc).trim();
+          if (!cleanName) return;
+          if (cleanName.includes(' - ')) {
+            cleanName = cleanName.split(' - ')[0].trim();
+          }
+          const spec = this._classifyAccountSpec(cleanName);
+          const exists = this.accounts.some(a =>
+            a.id === spec.accId || String(a.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+          );
+          if (!exists) {
+            this.accounts.push({
+              id: spec.accId,
+              name: cleanName,
+              provider: spec.provider,
+              type: spec.type,
+              balance: 0,
+              reconciledBalance: 0,
+              cashBalance: 0,
+              isLiquid: spec.isLiquid,
+              isVoucher: spec.isVoucher,
+              isInvestment: spec.isInvestment,
+              isBroker: spec.isBroker,
+              isPension: spec.isPension,
+              holdings: [],
+              lastReconciledMonth: latestSaldiInfo?.monthKey || '01/2000',
+              lastReconciledDate: latestSaldiInfo?.formattedDate || '01/01/2000',
+              defaultMode: spec.isPension ? 'delta' : 'balance'
+            });
+            this.addProvider(spec.provider);
+          }
+        });
+      });
+
+      // Per i conti non presenti nella scheda 'Saldi' (es. Buoni Pasto), ricostruisce il saldo di conguaglio cumulando i movimenti fino alla data di conguaglio
+      this.accounts.forEach(acc => {
+        if (reconciledAccountIds.has(acc.id)) return;
+        if (acc.isPension) return;
+
+        if (latestSaldiInfo) {
+          let cumAtCutoff = 0;
+          this.transactions.forEach(t => {
+            const tInfo = this._parseSheetDateInfo(t.date);
+            if (!tInfo || tInfo.timestamp > latestSaldiInfo.timestamp) return;
+            const amt = Math.abs(parseFloat(t.amount) || 0);
+            if (amt === 0) return;
+
+            const type = (t.type || '').toLowerCase();
+            const rawType = (t.rawType || '').toLowerCase();
+            const isExp = type === 'expense' || rawType === 'uscita';
+            const isInc = type === 'income' || rawType === 'entrata';
+            const isTrans = type === 'transfer' || rawType === 'trasferimento' || rawType === 'giroconto';
+
+            const isFrom = this._isMatchingAccount(t.fromAccount || t.account, acc);
+            const isTo = this._isMatchingAccount(t.toAccount, acc);
+
+            if (isExp && isFrom) cumAtCutoff -= amt;
+            else if (isInc && isFrom) cumAtCutoff += amt;
+            else if (isTrans) {
+              if (isFrom) cumAtCutoff -= amt;
+              if (isTo) cumAtCutoff += amt;
+            }
+          });
+          acc.reconciledBalance = Math.round(cumAtCutoff * 100) / 100;
+          acc.balance = acc.reconciledBalance;
+          acc.lastReconciledMonth = latestSaldiInfo.monthKey;
+          acc.lastReconciledDate = latestSaldiInfo.formattedDate;
+        } else {
+          acc.reconciledBalance = 0;
+          acc.balance = 0;
+          acc.lastReconciledMonth = '01/2000';
+          acc.lastReconciledDate = '01/01/2000';
+        }
+      });
+    }
+
+    // 6. Ordinamento canonico dei conti (1. Banca Liquida, 2. Broker/ETF, 3. Fondo Pensione, 4. Contanti, 5. Buoni Pasto)
+    const rankAccount = (a) => {
+      const nLow = String(a.name || '').toLowerCase();
+      if (a.isLiquid && a.id !== 'contanti' && !nLow.includes('contant')) return 1;
+      if (a.isBroker || a.isInvestment) return 2;
+      if (a.isPension) return 3;
+      if (a.id === 'contanti' || nLow.includes('contant')) return 4;
+      if (a.isVoucher) return 5;
+      return 6;
+    };
+    this.accounts.sort((a, b) => rankAccount(a) - rankAccount(b));
+
+    // 7. Calcolo al centesimo dei saldi vivi (Conguaglio + Movimenti successivi effettivi ad oggi)
+    this.recalculateLiveBalances();
+
+    // 8. Allineamento categorie dai movimenti reali, obiettivi di risparmio e chiusure mensili
+    if (Array.isArray(this.transactions)) {
+      const existingCatNames = new Set((this.categories || []).map(c => String(c.name || '').trim().toLowerCase()));
+      this.transactions.forEach(t => {
+        const rawCat = String(t.category || '').trim();
+        if (!rawCat) return;
+        const cleanCat = rawCat.replace(/^[^\w\sÀ-ÿ]+\s*/, '').trim();
+        if (cleanCat && !existingCatNames.has(cleanCat.toLowerCase()) && !existingCatNames.has(rawCat.toLowerCase())) {
+          const txType = (t.type === 'income' || t.type === 'transfer') ? t.type : 'expense';
+          this.categories.push({
+            id: 'cat_' + cleanCat.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+            name: cleanCat,
+            type: txType,
+            color: txType === 'income' ? '#34C759' : (txType === 'transfer' ? '#5856D6' : '#0071E3')
+          });
+          existingCatNames.add(cleanCat.toLowerCase());
+        }
+      });
+      this.saveCategories();
+    }
+
+    // Pulizia eventuali chiusure mensili demo e salvataggio snapshot del mese conguagliato dal foglio
+    try {
+      localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
+    } catch (e) {}
+
+    if (this.monthlyClosings) {
+      Object.keys(this.monthlyClosings).forEach(mKey => {
+        const mc = this.monthlyClosings[mKey];
+        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts)) {
+          delete this.monthlyClosings[mKey];
+        }
+      });
+    } else {
+      this.monthlyClosings = {};
+    }
+
+    // Importa eventuali breakdown mensili dalla scheda annuale (es. '2026') se restituiti dallo script
+    if (data.yearlyClosings && typeof data.yearlyClosings === 'object') {
+      Object.entries(data.yearlyClosings).forEach(([mKey, mcData]) => {
+        if (mcData && mcData.totalNW > 0) {
+          this.monthlyClosings[mKey] = mcData;
+          this.saveNetWorthSnapshot(mKey, mcData.totalNW);
+        }
+      });
+    }
+
+    if (latestSaldiInfo) {
+      const mKey = latestSaldiInfo.monthKey;
+      const closingAccounts = {};
+      let recTotalNW = 0;
+      this.accounts.forEach(a => {
+        const rBal = typeof a.reconciledBalance === 'number' ? a.reconciledBalance : (parseFloat(a.balance) || 0);
+        closingAccounts[a.name] = rBal;
+        if (!a.isVoucher) {
+          recTotalNW += rBal;
+        }
+      });
+      recTotalNW = Math.round(recTotalNW * 100) / 100;
+      this.monthlyClosings[mKey] = {
+        monthKey: mKey,
+        label: mKey,
+        date: latestSaldiInfo.formattedDate,
+        isClosed: true,
+        accounts: closingAccounts,
+        totalNW: recTotalNW,
+        notes: 'Allineato da Google Sheets (Saldi)'
+      };
+      this.saveNetWorthSnapshot(mKey, recTotalNW);
+    }
+
+    // Allinea gli obiettivi di risparmio se puntavano ancora ai nomi dei conti demo
+    const primaryLiquid = this.accounts.find(a => a.isLiquid && a.id !== 'contanti') || this.accounts[0];
+    const primaryBroker = this.accounts.find(a => a.isBroker || a.isInvestment);
+    if (Array.isArray(this.goals)) {
+      let goalsUpdated = false;
+      this.goals.forEach(g => {
+        if (g.account === 'Portafoglio Investimenti' && primaryBroker) {
+          g.account = primaryBroker.name;
+          const xeonH = (primaryBroker.holdings || []).find(h => String(h.ticker || '').toUpperCase() === 'XEON');
+          if (xeonH && g.id === 'goal_1') {
+            g.currentAmount = Math.round((parseFloat(xeonH.currentValue) || g.currentAmount) * 100) / 100;
+          }
+          goalsUpdated = true;
+        } else if (g.account === 'Conto Corrente' && primaryLiquid) {
+          g.account = primaryLiquid.name;
+          goalsUpdated = true;
+        }
+      });
+      if (goalsUpdated) this.saveGoals();
+    }
+
+    this.saldi = validSaldiRows;
+    this.saveMonthlyClosings();
+    this.saveAccounts();
+    if (hasTransactions) {
+      this.saveTransactions();
+    }
+    return true;
+  }
+
+  syncSaldiFromCloud(saldiList) {
+    if (!Array.isArray(saldiList) || saldiList.length === 0) return false;
+    return this.syncCloudData({ saldi: saldiList, transactions: this.transactions });
   }
 
   saveAccounts() {
@@ -2512,11 +2938,24 @@ class FinanceStore {
       if (saved) closings = JSON.parse(saved);
     } catch (e) {}
 
-    // Integra con la baseline dei breakdown iniziali se non presenti
+    const isCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+
+    if (isCloudSynced) {
+      if (closings && typeof closings === 'object') {
+        Object.keys(closings).forEach(mKey => {
+          const mc = closings[mKey];
+          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts)) {
+            delete closings[mKey];
+          }
+        });
+      }
+      return closings || {};
+    }
+
+    // Integra con la baseline dei breakdown iniziali solo in modalità dimostrativa
     if (!closings || Object.keys(closings).length === 0) {
       closings = JSON.parse(JSON.stringify(INITIAL_MONTHLY_BREAKDOWNS || {}));
     } else {
-      // Merge baseline per eventuali mesi non ancora salvati
       Object.entries(INITIAL_MONTHLY_BREAKDOWNS || {}).forEach(([mKey, data]) => {
         if (!closings[mKey]) {
           closings[mKey] = JSON.parse(JSON.stringify(data));
@@ -2864,49 +3303,64 @@ class FinanceStore {
 
   getHistoricalNetWorth() {
     const savedSnapshots = this.loadNetWorthSnapshots();
-    const baseHistorical = (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
+    const isCloudSynced = (typeof localStorage !== 'undefined') && localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
+    const baseHistorical = isCloudSynced ? [] : (INITIAL_HISTORICAL_NW || []).filter(d => d.value > 0);
 
     const nwMap = new Map();
     const isSnapshotMap = new Map();
 
+    const computeEffectiveFromAccountsMap = (accountsObj) => {
+      if (!accountsObj || typeof accountsObj !== 'object') return 0;
+      let eff = 0;
+      const keysLower = new Set(Object.keys(accountsObj).map(k => k.toLowerCase()));
+      Object.entries(accountsObj).forEach(([name, bal]) => {
+        const nLower = name.toLowerCase();
+        if (nLower.includes('pensione') || nLower.includes('previden')) return;
+        if (nLower.includes('buoni pasto') || nLower.includes('ticket') || nLower.includes('tiket')) return;
+        if (nLower.includes(' - ')) {
+          const parentBroker = nLower.split(' - ')[0].trim();
+          if (keysLower.has(parentBroker)) return;
+        }
+        eff += (parseFloat(bal) || 0);
+      });
+      return Math.round(eff * 100) / 100;
+    };
+
     baseHistorical.forEach(item => {
-      // Se il mese ha un breakdown nei closing, ricava il valore effettivo netto (senza pensione)
       const closing = this.monthlyClosings ? this.monthlyClosings[item.month] : null;
       if (closing && closing.accounts) {
-        let eff = 0;
-        Object.entries(closing.accounts).forEach(([name, bal]) => {
-          const nLower = name.toLowerCase();
-          if (!nLower.includes('pensione') && !nLower.includes('previden')) {
-            eff += (parseFloat(bal) || 0);
-          }
-        });
+        const eff = computeEffectiveFromAccountsMap(closing.accounts);
         if (eff > 0) {
-          nwMap.set(item.month, Math.round(eff * 100) / 100);
+          nwMap.set(item.month, eff);
           isSnapshotMap.set(item.month, true);
           return;
         }
       }
-      // Fallback: scorpora circa la quota pensione se nota o usa proporzione
       const pensionEstimate = 3000;
       const effVal = Math.max(1000, item.value - pensionEstimate);
       nwMap.set(item.month, Math.round(effVal * 100) / 100);
       isSnapshotMap.set(item.month, true);
     });
 
+    if (this.monthlyClosings && typeof this.monthlyClosings === 'object') {
+      Object.entries(this.monthlyClosings).forEach(([monthYear, closing]) => {
+        if (closing && closing.accounts) {
+          const eff = computeEffectiveFromAccountsMap(closing.accounts);
+          if (eff > 0) {
+            nwMap.set(monthYear, eff);
+            isSnapshotMap.set(monthYear, true);
+          }
+        }
+      });
+    }
+
     Object.entries(savedSnapshots).forEach(([monthYear, val]) => {
       if (typeof val === 'number' && val > 0) {
-        // Se è presente nei monthly closings, privilegia la somma dei soli conti disponibili + investiti
         const closing = this.monthlyClosings ? this.monthlyClosings[monthYear] : null;
         if (closing && closing.accounts) {
-          let eff = 0;
-          Object.entries(closing.accounts).forEach(([name, b]) => {
-            const nLower = name.toLowerCase();
-            if (!nLower.includes('pensione') && !nLower.includes('previden')) {
-              eff += (parseFloat(b) || 0);
-            }
-          });
+          const eff = computeEffectiveFromAccountsMap(closing.accounts);
           if (eff > 0) {
-            nwMap.set(monthYear, Math.round(eff * 100) / 100);
+            nwMap.set(monthYear, eff);
             isSnapshotMap.set(monthYear, true);
             return;
           }
@@ -2938,15 +3392,47 @@ class FinanceStore {
     const currentMonthKey = `${String(curMonth).padStart(2, '0')}/${curYear}`;
 
     const availableYearsNum = this.getAvailableYears().map(y => parseInt(y, 10)).filter(n => !isNaN(n));
-    const minYear = availableYearsNum.length > 0 ? Math.min(...availableYearsNum) : 2024;
+    const minYear = availableYearsNum.length > 0 ? Math.min(...availableYearsNum) : (isCloudSynced ? curYear : 2024);
     const maxYear = availableYearsNum.length > 0 ? Math.max(...availableYearsNum) : curYear;
-    const startYear = Math.min(2024, minYear);
+    const startYear = isCloudSynced ? minYear : Math.min(2024, minYear);
     const startMonth = 1;
     const endYear = Math.max(curYear, maxYear);
     const endMonth = (endYear > curYear) ? 12 : curMonth;
 
+    // Se in modalità Cloud manca una serie storica anteriore al primo snapshot (es. 10/2026), ricostruisce a ritroso tramite i flussi netti reali
+    if (nwMap.size > 0) {
+      const sortedSnapKeys = Array.from(nwMap.keys()).sort((a, b) => {
+        const [ma, ya] = a.split('/').map(Number);
+        const [mb, yb] = b.split('/').map(Number);
+        return (ya * 12 + ma) - (yb * 12 + mb);
+      });
+      const earliestKey = sortedSnapKeys[0];
+      const [em, ey] = earliestKey.split('/').map(Number);
+      let backVal = nwMap.get(earliestKey) || 0;
+      let by = ey;
+      let bm = em;
+
+      while (by > startYear || (by === startYear && bm > startMonth)) {
+        const curKey = `${String(bm).padStart(2, '0')}/${by}`;
+        const flowOfCur = monthlyNetFlows.get(curKey) || 0;
+        bm--;
+        if (bm < 1) {
+          bm = 12;
+          by--;
+        }
+        const prevKey = `${String(bm).padStart(2, '0')}/${by}`;
+        if (!nwMap.has(prevKey)) {
+          backVal = Math.max(250, Math.round((backVal - flowOfCur) * 100) / 100);
+          nwMap.set(prevKey, backVal);
+        } else {
+          backVal = nwMap.get(prevKey);
+        }
+      }
+    }
+
     const fullTimeline = [];
-    let prevVal = baseHistorical.length > 0 ? (nwMap.get(baseHistorical[0].month) || baseHistorical[0].value) : 0;
+    const firstKey = `${String(startMonth).padStart(2, '0')}/${startYear}`;
+    let prevVal = nwMap.get(firstKey) || (baseHistorical.length > 0 ? baseHistorical[0].value : Math.max(0, this.summary.effectiveNetWorth));
 
     let y = startYear;
     let m = startMonth;
@@ -3052,52 +3538,101 @@ class FinanceStore {
     return history;
   }
 
-  // === SPESE RICORRENTI & RATE ATTIVE ===
+  // === SPESE RICORRENTI & RATE ATTIVE (100% DINAMICHE DAI MOVIMENTI REALI) ===
   get recurringItems() {
-    return [
-      {
-        id: 'rec_1',
-        name: 'Regalo Serena (Rata)',
-        monthlyAmount: 44.67,
-        totalRate: 3,
-        currentRata: 2,
-        nextDate: '26/11/2026',
-        category: '❔Altro',
-        completed: false
-      },
-      {
-        id: 'rec_2',
-        name: 'Scopa Elettrica (Rata)',
-        monthlyAmount: 33.67,
-        totalRate: 3,
-        currentRata: 2,
-        nextDate: '25/11/2026',
-        category: '❔Altro',
-        completed: false
-      },
-      {
-        id: 'rec_3',
+    const items = [];
+    const rataGroups = new Map();
+
+    (this.transactions || []).forEach(t => {
+      const desc = String(t.description || '').trim();
+      if (!desc) return;
+      const m = desc.match(/^(.*?)\s*\b(?:rata)\s*(\d+)(?:\s*\/\s*(\d+))?\b/i);
+      if (m) {
+        const baseLabel = (m[1] || desc).trim().replace(/[-–—:]$/, '').trim();
+        const rataNum = parseInt(m[2], 10) || 1;
+        const totRate = m[3] ? parseInt(m[3], 10) : Math.max(3, rataNum);
+        const key = baseLabel.toLowerCase();
+        const dInfo = this._parseSheetDateInfo(t.date);
+        const prev = rataGroups.get(key);
+        if (!prev || rataNum >= prev.rataNum) {
+          rataGroups.set(key, {
+            baseLabel: baseLabel.charAt(0).toUpperCase() + baseLabel.slice(1),
+            amount: Math.abs(parseFloat(t.amount) || 0),
+            rataNum,
+            totRate: Math.max(totRate, prev?.totRate || 0),
+            date: dInfo?.formattedDate || t.date || '',
+            timestamp: dInfo?.timestamp || 0,
+            category: t.category || '🏡 Casa'
+          });
+        }
+      }
+    });
+
+    const todayTs = new Date().setHours(0, 0, 0, 0);
+    let idx = 1;
+    rataGroups.forEach(g => {
+      const isFuture = g.timestamp > todayTs;
+      const currentPaid = isFuture ? Math.max(0, g.rataNum - 1) : g.rataNum;
+      if (currentPaid < g.totRate || isFuture) {
+        items.push({
+          id: `rec_rata_${idx++}`,
+          name: `${g.baseLabel} (Rata)`,
+          monthlyAmount: g.amount,
+          totalRate: g.totRate,
+          currentRata: currentPaid,
+          nextDate: g.date,
+          category: g.category,
+          completed: false
+        });
+      }
+    });
+
+    let latestRentTx = null;
+    let latestRentTs = -1;
+    (this.transactions || []).forEach(t => {
+      if (t.type === 'expense' && /affitto|canone locazione/i.test(String(t.description || ''))) {
+        const ts = this._parseSheetDateInfo(t.date)?.timestamp || 0;
+        if (ts >= latestRentTs) {
+          latestRentTs = ts;
+          latestRentTx = t;
+        }
+      }
+    });
+    if (latestRentTx) {
+      items.push({
+        id: 'rec_fixed_rent',
         name: 'Affitto / Casa',
-        monthlyAmount: 600.00,
+        monthlyAmount: Math.abs(parseFloat(latestRentTx.amount) || 0),
         totalRate: 0,
         currentRata: 0,
         nextDate: 'Ogni inizio mese',
         category: '🏡 Casa',
         completed: false,
         isFixed: true
-      },
-      {
-        id: 'rec_4',
-        name: 'PAC VWCE Azionario Globale',
-        monthlyAmount: 200.00,
-        totalRate: 0,
-        currentRata: 0,
-        nextDate: '02/11/2026',
-        category: '🛅 Livello Crescita',
-        completed: false,
-        isPAC: true
+      });
+    }
+
+    (this.accounts || []).forEach(acc => {
+      if (Array.isArray(acc.holdings)) {
+        acc.holdings.forEach(h => {
+          if (h.isPac && parseFloat(h.pacAmount) > 0) {
+            items.push({
+              id: `rec_pac_${h.ticker || idx++}`,
+              name: `PAC ${h.ticker || h.name}`,
+              monthlyAmount: parseFloat(h.pacAmount),
+              totalRate: 0,
+              currentRata: 0,
+              nextDate: 'Piano mensile attivo',
+              category: '📈 PAC Azionario',
+              completed: false,
+              isPAC: true
+            });
+          }
+        });
       }
-    ];
+    });
+
+    return items;
   }
 
   getRecurringExpenses() {
@@ -7234,23 +7769,27 @@ class DashboardView {
             </div>
           ` : ''}
 
-          ${isVoucher ? `
+          ${isVoucher ? (() => {
+            const voucherUnit = (acc.balance > 0 && Math.abs((acc.balance / 10.5) - Math.round(acc.balance / 10.5)) < 0.02) ? 10.50 : 8.00;
+            const voucherCount = Math.round(acc.balance / voucherUnit);
+            return `
             <div style="background: rgba(255, 149, 0, 0.06); border: 1px solid rgba(255, 149, 0, 0.2); border-radius: 14px; padding: 14px; margin-bottom: 14px;">
               <span style="font-size: 11.5px; font-weight: 700; color: var(--apple-orange); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 8px;">Dettaglio Buoni Pasto</span>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="font-size: 12.5px; color: var(--text-primary);">Valore unitario buono</span>
-                <strong style="font-size: 13px;">7,00 € / buono</strong>
+                <strong style="font-size: 13px;">${this.formatCurrency(voucherUnit)} / buono</strong>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="font-size: 12.5px; color: var(--text-primary);">Buoni residui disponibili</span>
-                <strong class="privacy-mask" style="font-size: 13px; color: var(--apple-orange); font-variant-numeric: tabular-nums;">${Math.round(acc.balance / 7)} buoni</strong>
+                <strong class="privacy-mask" style="font-size: 13px; color: var(--apple-orange); font-variant-numeric: tabular-nums;">${voucherCount} buoni</strong>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 0.5px solid rgba(255, 149, 0, 0.15);">
                 <span style="font-size: 11px; color: var(--text-tertiary);">Trattamento fiscale</span>
                 <span style="font-size: 11px; color: var(--apple-green); font-weight: 600;">100% Esente da imposte (Art. 51 TUIR)</span>
               </div>
             </div>
-          ` : ''}
+            `;
+          })() : ''}
 
           ${isPension ? `
             <div style="background: rgba(52, 199, 89, 0.06); border: 1px solid rgba(52, 199, 89, 0.2); border-radius: 14px; padding: 14px; margin-bottom: 14px;">
@@ -15505,21 +16044,18 @@ class ImpostazioniView {
     if (feedbackEl) {
       feedbackEl.style.display = 'block';
       feedbackEl.className = 'connection-feedback loading';
-      feedbackEl.textContent = 'Scaricamento e allineamento dati da Google Sheets in corso...';
+      feedbackEl.textContent = 'Scaricamento e allineamento conti, saldi e movimenti da Google Sheets in corso...';
     }
 
     try {
       const data = await googleSheetsService.fetchAllData();
       if (data) {
-        if (data.transactions && data.transactions.length > 0) {
-          financeStore.setTransactions(data.transactions);
-        }
-        if (data.saldi && data.saldi.length > 0) {
-          financeStore.syncSaldiFromCloud(data.saldi);
-        }
+        financeStore.syncCloudData(data);
+        const accCount = financeStore.getAccounts().length;
+        const txCount = Array.isArray(data.transactions) ? data.transactions.length : 0;
         if (feedbackEl) {
           feedbackEl.className = 'connection-feedback success';
-          feedbackEl.textContent = `Sincronizzazione completata con successo! ${data.transactions.length} movimenti e saldi allineati.`;
+          feedbackEl.textContent = `Sincronizzazione completata! ${accCount} conti reali e ${txCount} movimenti allineati al foglio.`;
         }
         setTimeout(() => this.render(container), 800);
       } else if (feedbackEl) {
@@ -16051,15 +16587,7 @@ class AppController {
 
   applyCloudData(data) {
     if (!data) return;
-    let updated = false;
-    if (data.transactions && Array.isArray(data.transactions) && data.transactions.length > 0) {
-      financeStore.setTransactions(data.transactions);
-      updated = true;
-    }
-    if (data.saldi && Array.isArray(data.saldi) && data.saldi.length > 0) {
-      const saldiChanged = financeStore.syncSaldiFromCloud(data.saldi);
-      if (saldiChanged) updated = true;
-    }
+    const updated = financeStore.syncCloudData(data);
     if (updated) {
       const container = document.getElementById('main-viewport');
       if (!container) return;

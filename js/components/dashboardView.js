@@ -743,23 +743,27 @@ export class DashboardView {
             </div>
           ` : ''}
 
-          ${isVoucher ? `
+          ${isVoucher ? (() => {
+            const voucherUnit = (acc.balance > 0 && Math.abs((acc.balance / 10.5) - Math.round(acc.balance / 10.5)) < 0.02) ? 10.50 : 8.00;
+            const voucherCount = Math.round(acc.balance / voucherUnit);
+            return `
             <div style="background: rgba(255, 149, 0, 0.06); border: 1px solid rgba(255, 149, 0, 0.2); border-radius: 14px; padding: 14px; margin-bottom: 14px;">
               <span style="font-size: 11.5px; font-weight: 700; color: var(--apple-orange); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 8px;">Dettaglio Buoni Pasto</span>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="font-size: 12.5px; color: var(--text-primary);">Valore unitario buono</span>
-                <strong style="font-size: 13px;">7,00 € / buono</strong>
+                <strong style="font-size: 13px;">${this.formatCurrency(voucherUnit)} / buono</strong>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="font-size: 12.5px; color: var(--text-primary);">Buoni residui disponibili</span>
-                <strong class="privacy-mask" style="font-size: 13px; color: var(--apple-orange); font-variant-numeric: tabular-nums;">${Math.round(acc.balance / 7)} buoni</strong>
+                <strong class="privacy-mask" style="font-size: 13px; color: var(--apple-orange); font-variant-numeric: tabular-nums;">${voucherCount} buoni</strong>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 0.5px solid rgba(255, 149, 0, 0.15);">
                 <span style="font-size: 11px; color: var(--text-tertiary);">Trattamento fiscale</span>
                 <span style="font-size: 11px; color: var(--apple-green); font-weight: 600;">100% Esente da imposte (Art. 51 TUIR)</span>
               </div>
             </div>
-          ` : ''}
+            `;
+          })() : ''}
 
           ${isPension ? `
             <div style="background: rgba(52, 199, 89, 0.06); border: 1px solid rgba(52, 199, 89, 0.2); border-radius: 14px; padding: 14px; margin-bottom: 14px;">

@@ -26,7 +26,7 @@
 
 ---
 
-## 📊 Stato Attuale dei Moduli (v2026.44 — Produzione Ufficiale `main`)
+## 📊 Stato Attuale dei Moduli (v2026.45 — Produzione Ufficiale `main`)
 
 | Modulo | Stato | Dettagli Implementati |
 | :--- | :---: | :--- |
@@ -43,6 +43,12 @@
 ---
 
 ## 🧪 Registro Sviluppo & Rilasci (Changelog Ufficiale)
+
+- **[MERGE MAIN - v2026.45] Motore di Auto-Ricostruzione Conti & Saldi da Google Sheets (`syncCloudData`)**:
+  - Risolto il disallineamento tra database dimostrativo (`demoData.js`) e foglio personale Google Sheets al collegamento Cloud: il nuovo metodo atomico `financeStore.syncCloudData(data)` in `js/data/mockData.js` rimuove automaticamente i conti fittizi dimostrativi e ricostruisce dinamicamente i conti reali presenti nelle schede `Saldi` e `Movimenti` con i loro nomi esatti.
+  - Consolidamento automatico dei sotto-asset Broker (`Provider - Ticker`, es. ETF monetari e azionari) nel conto Broker unificato con allineamento contestuale di `reconciledBalance` e `balance`.
+  - Calcolo retroattivo automatico del saldo di conguaglio dai movimenti storici per i conti attivi presenti in `Movimenti` ma non elencati in `Saldi` (es. Buoni Pasto / Benefit), garantendo quadratura al centesimo senza richiedere modifiche al foglio o ridistribuzioni dello script `Code.gs`.
+  - Rilevamento 100% dinamico delle rate e spese ricorrenti direttamente dal registro movimenti e pulizia automatica delle chiusure mensili demo in `Storico NW`. [2026-11-07]
 
 - **[MERGE MAIN - v2026.44] Rilascio Ufficiale in Produzione & Reset Cronologia Pubblica GitHub**:
   - Promozione sul ramo stabile `main` (`APP_ENV.branch = 'main'`, `isBeta = false`, `defaultSandboxMode = false`) di tutti gli sviluppi validati su Mac e iPhone.

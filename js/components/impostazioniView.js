@@ -1367,21 +1367,18 @@ export class ImpostazioniView {
     if (feedbackEl) {
       feedbackEl.style.display = 'block';
       feedbackEl.className = 'connection-feedback loading';
-      feedbackEl.textContent = 'Scaricamento e allineamento dati da Google Sheets in corso...';
+      feedbackEl.textContent = 'Scaricamento e allineamento conti, saldi e movimenti da Google Sheets in corso...';
     }
 
     try {
       const data = await googleSheetsService.fetchAllData();
       if (data) {
-        if (data.transactions && data.transactions.length > 0) {
-          financeStore.setTransactions(data.transactions);
-        }
-        if (data.saldi && data.saldi.length > 0) {
-          financeStore.syncSaldiFromCloud(data.saldi);
-        }
+        financeStore.syncCloudData(data);
+        const accCount = financeStore.getAccounts().length;
+        const txCount = Array.isArray(data.transactions) ? data.transactions.length : 0;
         if (feedbackEl) {
           feedbackEl.className = 'connection-feedback success';
-          feedbackEl.textContent = `Sincronizzazione completata con successo! ${data.transactions.length} movimenti e saldi allineati.`;
+          feedbackEl.textContent = `Sincronizzazione completata! ${accCount} conti reali e ${txCount} movimenti allineati al foglio.`;
         }
         setTimeout(() => this.render(container), 800);
       } else if (feedbackEl) {
