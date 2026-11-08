@@ -2587,6 +2587,34 @@ class FinanceStore {
         })
       : [];
 
+    // 2b. Integra in validSaldiRows eventuali conti o voucher certificati nell'ultimo conguaglio di data.storico ma assenti in Saldi
+    if (hasStorico) {
+      let latestStoricoDateInfo = null;
+      data.storico.forEach(st => {
+        const dInfo = this._parseSheetDateInfo(st.date);
+        if (dInfo && (!latestStoricoDateInfo || dInfo.timestamp >= latestStoricoDateInfo.timestamp)) {
+          latestStoricoDateInfo = dInfo;
+        }
+      });
+
+      if (latestStoricoDateInfo) {
+        data.storico.forEach(st => {
+          if (!st || !st.name) return;
+          const n = String(st.name).trim().toLowerCase();
+          const tp = String(st.type || '').trim().toLowerCase();
+          if (n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo') || tp.includes('disponibilità diretta')) return;
+
+          const dInfo = this._parseSheetDateInfo(st.date);
+          if (dInfo && dInfo.monthKey === latestStoricoDateInfo.monthKey) {
+            const alreadyInSaldi = validSaldiRows.some(s => this._isMatchingAccount(s.name, { name: st.name, id: this._slugifyAccountId(st.name) }));
+            if (!alreadyInSaldi) {
+              validSaldiRows.push(st);
+            }
+          }
+        });
+      }
+    }
+
     // Raccoglie tutti i nomi reali dei conti presenti nel foglio cloud (Saldi + Movimenti)
     const cloudAccountNamesLower = new Set();
     validSaldiRows.forEach(s => {
@@ -2978,12 +3006,13 @@ class FinanceStore {
           const newBal = parseFloat(latestRow.s.balance) || 0;
           acc.reconciledBalance = newBal;
           acc.balance = newBal;
+          acc.isExtinct = false;
           if (latestRow.dInfo) {
             acc.lastReconciledMonth = latestRow.dInfo.monthKey;
             acc.lastReconciledDate = latestRow.dInfo.formattedDate;
           }
           reconciledAccountIds.add(acc.id);
-        } else {
+        } else if (!acc.isVoucher && acc.id !== 'buoni_pasto') {
           // Conto storico chiuso o estinto nel passato (es. BTC o Salvadanaio)
           acc.reconciledBalance = 0;
           acc.balance = 0;
@@ -3066,6 +3095,8 @@ class FinanceStore {
           const lowerType = String(s.type || '').toLowerCase();
           if (lowerName.includes('pensione') || lowerType.includes('previden')) {
             pensionBal += bal;
+          } else if (lowerName.includes('buon') || lowerType.includes('benefit') || lowerName.includes('ticket') || lowerName.includes('tiket')) {
+            // I buoni pasto sono benefit alimentari, non liquidità o investimenti diretti
           } else {
             directNW += bal;
           }
@@ -3172,8 +3203,10 @@ class FinanceStore {
           });
           acc.reconciledBalance = Math.round(cumAtCutoff * 100) / 100;
           acc.balance = acc.reconciledBalance;
+          acc.isExtinct = false;
           acc.lastReconciledMonth = latestSaldiInfo.monthKey;
           acc.lastReconciledDate = latestSaldiInfo.formattedDate;
+          reconciledAccountIds.add(acc.id);
         } else {
           acc.reconciledBalance = 0;
           acc.balance = 0;
