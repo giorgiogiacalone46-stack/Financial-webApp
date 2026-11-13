@@ -640,21 +640,43 @@ class FinanceStore {
       }
     });
 
-    // 4.1 Identificazione deterministica dell'ultimo conguaglio (T_max, es. 31/10/2026)
+    // 4.1 Identificazione deterministica dell'ultimo conguaglio e modalità Snapshot Unico
+    const saldiMonths = new Set();
     validSaldiRows.forEach(s => {
       const dInfo = this._parseSheetDateInfo(s.date);
-      if (dInfo && (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp)) {
-        latestSaldiInfo = dInfo;
+      if (dInfo) {
+        saldiMonths.add(dInfo.monthKey);
+        if (!latestSaldiInfo || dInfo.timestamp >= latestSaldiInfo.timestamp) {
+          latestSaldiInfo = dInfo;
+        }
       }
     });
 
-    // RIGOROSA REGOLA ARCHITETTURALE:
-    // I conti operativi e le holdings attive ad oggi derivano ESCLUSIVAMENTE dal conguaglio T_max.
-    // Tutto ciò che compare solo in conguagli passati appartiene allo storico e NON allo stato vivo.
-    const latestClosingRows = validSaldiRows.filter(s => {
-      const dInfo = this._parseSheetDateInfo(s.date);
-      return dInfo && latestSaldiInfo && dInfo.monthKey === latestSaldiInfo.monthKey;
-    });
+    // Con scheda 'Storico' separata (v2026.50+) o al massimo 2 mesi in 'Saldi' (es. aggiornamento parziale),
+    // la scheda 'Saldi' funge da Snapshot Unico dei conti vivi: non marcare estinti conti per differenze di data.
+    const isSingleSnapshotMode = hasStorico || saldiMonths.size <= 2;
+
+    let latestClosingRows = [];
+    if (isSingleSnapshotMode) {
+      const latestByAsset = new Map();
+      validSaldiRows.forEach(s => {
+        const key = String(s.name || '').trim().toLowerCase();
+        if (!key) return;
+        const dInfo = this._parseSheetDateInfo(s.date);
+        const ts = dInfo?.timestamp || 0;
+        const existing = latestByAsset.get(key);
+        if (!existing || ts >= existing.ts) {
+          latestByAsset.set(key, { s, ts });
+        }
+      });
+      latestClosingRows = Array.from(latestByAsset.values()).map(v => v.s);
+    } else {
+      // Fallback per fogli storici multi-anno legacy senza scheda 'Storico'
+      latestClosingRows = validSaldiRows.filter(s => {
+        const dInfo = this._parseSheetDateInfo(s.date);
+        return dInfo && latestSaldiInfo && dInfo.monthKey === latestSaldiInfo.monthKey;
+      });
+    }
 
     const activeSaldiAccountNames = new Set();
     const activeSaldiHoldings = new Set();
@@ -750,7 +772,7 @@ class FinanceStore {
 
         // Non creare holding per strumenti storici estinti/chiusi (es. iShares, SWDA)
         const isDisusedAsset = assetPart.toLowerCase().includes('ishare') || ticker === 'SWDA' || ticker === 'XMME' || ticker === 'SEGA' || ticker === 'LYQ3' || ticker === 'EIMI';
-        if (isDisusedAsset && (!activeSaldiHoldings.has(rawName.toLowerCase()) || dInfo?.monthKey !== latestSaldiInfo?.monthKey)) {
+        if (isDisusedAsset && (!activeSaldiHoldings.has(rawName.toLowerCase()) || (!isSingleSnapshotMode && dInfo?.monthKey !== latestSaldiInfo?.monthKey))) {
           return;
         }
 
@@ -877,8 +899,8 @@ class FinanceStore {
                 }
               }
             });
-            // Se l'holding è presente con riga dedicata nell'ultimo conguaglio certificato
-            if (latestHoldingRow && latestHoldingRow.dInfo && latestHoldingRow.dInfo.monthKey === latestSaldiInfo?.monthKey) {
+            // Se l'holding è presente con riga dedicata nello snapshot certificato
+            if (latestHoldingRow && latestHoldingRow.dInfo && (isSingleSnapshotMode || latestHoldingRow.dInfo.monthKey === latestSaldiInfo?.monthKey)) {
               const newBal = parseFloat(latestHoldingRow.s.balance) || 0;
               h.currentValue = newBal;
               const refPrice = h.ticker === 'XEON' ? 144.08 : (h.ticker === 'VWCE' ? 124.62 : (parseFloat(h.price) || 100));
@@ -956,8 +978,8 @@ class FinanceStore {
             }
           }
         });
-        // Solo se il conto compare nell'ultimo conguaglio certificato ha saldo attivo oggi
-        if (latestRow && latestRow.dInfo && latestRow.dInfo.monthKey === latestSaldiInfo?.monthKey) {
+        // Se il conto compare nello snapshot certificato (o nell'ultimo conguaglio in modalità multi-anno) ha saldo attivo oggi
+        if (latestRow && latestRow.dInfo && (isSingleSnapshotMode || latestRow.dInfo.monthKey === latestSaldiInfo?.monthKey)) {
           const newBal = parseFloat(latestRow.s.balance) || 0;
           acc.reconciledBalance = newBal;
           acc.balance = newBal;
@@ -993,6 +1015,14 @@ class FinanceStore {
     });
 
     // 5. Raggruppa tutte le righe storiche di Storico e Saldi per Mese e genera le Chiusure Mensili certificate
+    const storicoMonths = new Set();
+    if (hasStorico) {
+      data.storico.forEach(st => {
+        const dInfo = this._parseSheetDateInfo(st.date);
+        if (dInfo) storicoMonths.add(dInfo.monthKey);
+      });
+    }
+
     const allHistoricalSaldiRows = [
       ...(hasStorico ? data.storico : []),
       ...validSaldiRows
@@ -1030,11 +1060,24 @@ class FinanceStore {
     }
 
     saldiByMonth.forEach((group, mKey) => {
+      // Deduplica eventuali righe ripetute tra Storico e Saldi nello stesso mese
+      const uniqueRowsByName = new Map();
+      group.rows.forEach(s => {
+        const key = String(s.name || '').trim().toLowerCase();
+        if (key) uniqueRowsByName.set(key, s);
+      });
+      const dedupedRows = Array.from(uniqueRowsByName.values());
+
+      // Evita di creare chiusure mensili parziali in caso di data isolata in Saldi su singolo conto
+      if (isSingleSnapshotMode && hasStorico && !storicoMonths.has(mKey) && saldiMonths.size > 1 && !summaryRowsByMonth.has(mKey) && dedupedRows.length < latestClosingRows.length) {
+        return;
+      }
+
       const closingAccounts = {};
       let directNW = 0;
       let pensionBal = 0;
 
-      group.rows.forEach(s => {
+      dedupedRows.forEach(s => {
         const rawName = String(s.name || '').trim();
         const bal = parseFloat(s.balance);
         if (!rawName || isNaN(bal)) return;
@@ -1734,18 +1777,6 @@ class FinanceStore {
       if (type === 'expense') accObj.balance = Math.round((accObj.balance - amount) * 100) / 100;
       else if (type === 'income') accObj.balance = Math.round((accObj.balance + amount) * 100) / 100;
     }
-    this.saveAccounts();
-
-    // Sincronizza saldi remoti su Google Sheets se configurato
-    try {
-      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
-        if (accObj) window.googleSheetsService.updateAccountBalance(accObj.name, accObj.balance, accObj.type);
-        if (toAccObj && toAccObj.id !== accObj.id) window.googleSheetsService.updateAccountBalance(toAccObj.name, toAccObj.balance, toAccObj.type);
-      }
-    } catch (e) {
-      console.warn('Errore sync saldo remoto:', e);
-    }
-
     this.transactions.unshift(tx);
     this.recalculateLiveBalances();
     this.saveAccounts();
@@ -1840,15 +1871,6 @@ class FinanceStore {
       if (type === 'expense') accObj.balance = Math.round((accObj.balance + amt) * 100) / 100;
       else if (type === 'income') accObj.balance = Math.round((accObj.balance - amt) * 100) / 100;
     }
-    this.saveAccounts();
-
-    try {
-      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
-        if (accObj) window.googleSheetsService.updateAccountBalance(accObj.name, accObj.balance, accObj.type);
-        if (toAccObj && toAccObj.id !== accObj.id) window.googleSheetsService.updateAccountBalance(toAccObj.name, toAccObj.balance, toAccObj.type);
-      }
-    } catch (e) {}
-
     this.transactions = this.transactions.filter(t => t.id !== id);
     this.recalculateLiveBalances();
     this.saveAccounts();
@@ -1974,20 +1996,6 @@ class FinanceStore {
       else if (newType === 'income') newAccObj.balance = Math.round((newAccObj.balance + newAmt) * 100) / 100;
     }
 
-    this.saveAccounts();
-
-    try {
-      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
-        const affected = [oldAccObj, oldToAccObj, newAccObj, newToAccObj].filter(Boolean);
-        const uniqueNames = [...new Set(affected.map(a => a.name))];
-        uniqueNames.forEach(name => {
-          const acc = this.findAccount(name);
-          if (acc) window.googleSheetsService.updateAccountBalance(acc.name, acc.balance, acc.type);
-        });
-      }
-    } catch (e) {}
-
-    this.saveAccounts();
     this.transactions[idx] = mergedTx;
     this.recalculateLiveBalances();
     this.saveAccounts();
@@ -2327,7 +2335,7 @@ class FinanceStore {
             acc.lastReconciledDate = closingData.date || acc.lastReconciledDate;
             try {
               if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
-                window.googleSheetsService.updateAccountBalance(acc.name, acc.balance, acc.type);
+                window.googleSheetsService.updateAccountBalance(acc.name, acc.balance, acc.type, closingData.date || null);
               }
             } catch (err) {}
           }
@@ -3568,12 +3576,13 @@ class FinanceStore {
     const now = new Date();
     const curMonthKey = monthKey || `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
     const todayFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
 
     let createdTx = null;
     if (createMovement && Math.abs(delta) > 0.001) {
       const isPositive = delta > 0;
       const type = isPositive ? 'income' : 'expense';
-      const isPension = target.isPension || (target.type || '').toLowerCase().includes('pension');
 
       const tx = {
         id: 'tx_rec_' + Date.now(),
@@ -3590,28 +3599,47 @@ class FinanceStore {
       };
 
       this.transactions.unshift(tx);
-      this.recalculateLiveBalances();
+      if (isPension) {
+        target.balance = targetBalance;
+        target.reconciledBalance = targetBalance;
+      } else {
+        this.recalculateLiveBalances();
+      }
+      target.defaultMode = mode;
       this.saveAccounts();
       this.saveTransactions();
       createdTx = tx;
-    }
 
-    target.balance = targetBalance;
-    target.reconciledBalance = targetBalance;
-    target.lastReconciledMonth = curMonthKey;
-    target.lastReconciledDate = todayFormatted;
-    target.defaultMode = mode;
-    this.saveAccounts();
-
-    // Aggiorna e fissa lo snapshot per il mese del conguaglio
-    this.saveNetWorthSnapshot(curMonthKey, this.summary.netWorth);
-
-    // Se configurato Google Sheets, aggiorna saldo da remoto
-    try {
-      if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
-        window.googleSheetsService.updateAccountBalance(target.name, targetBalance, target.type);
+      try {
+        if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+          window.googleSheetsService.pushTransaction({ ...tx, date: todayIso }).catch(err => console.warn('Sync rettifica fallita:', err));
+          if (isPension) {
+            window.googleSheetsService.updateAccountBalance(target.name, targetBalance, target.type);
+          }
+        }
+      } catch (e) {}
+    } else if (!createMovement || Math.abs(delta) <= 0.001) {
+      target.balance = targetBalance;
+      target.reconciledBalance = targetBalance;
+      target.defaultMode = mode;
+      if (!createMovement) {
+        target.lastReconciledMonth = curMonthKey;
+        target.lastReconciledDate = todayFormatted;
       }
-    } catch (e) {}
+      this.saveAccounts();
+
+      // Aggiorna e fissa lo snapshot per il mese del conguaglio
+      this.saveNetWorthSnapshot(curMonthKey, this.summary.netWorth);
+
+      // Solo per rettifica fittizia senza movimento aggiorna il saldo remoto preservando coerenza in Saldi
+      if (!createMovement) {
+        try {
+          if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
+            window.googleSheetsService.updateAccountBalance(target.name, targetBalance, target.type, todayFormatted);
+          }
+        } catch (e) {}
+      }
+    }
 
     return {
       success: true,
@@ -3737,10 +3765,10 @@ class FinanceStore {
         createdTransactions.push(tx);
       }
 
-      // Sincronizzazione Google Sheets
+      // Sincronizzazione Google Sheets con data esplicita del fine mese di chiusura
       try {
         if (typeof window !== 'undefined' && window.googleSheetsService && window.googleSheetsService.isConfigured()) {
-          window.googleSheetsService.updateAccountBalance(target.name, newBal, target.type);
+          window.googleSheetsService.updateAccountBalance(target.name, newBal, target.type, closingDateFormatted);
         }
       } catch (err) {}
     });

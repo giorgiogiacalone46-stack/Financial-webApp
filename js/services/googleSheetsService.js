@@ -488,7 +488,7 @@ export class GoogleSheetsService {
     }
   }
 
-  async updateAccountBalance(accountName, balance, type) {
+  async updateAccountBalance(accountName, balance, type, date = null) {
     if (this.sandboxMode) {
       console.log('🛡️ [Beta Sandbox] Aggiornamento saldo remoto bloccato: conguaglio solo locale fittizio.');
       return { success: true, localOnly: true, sandbox: true };
@@ -496,8 +496,10 @@ export class GoogleSheetsService {
 
     if (!this.isConfigured()) return { success: true, localOnly: true };
 
+    const queuePayload = { accountName, balance, type, ...(date ? { date } : {}) };
+
     if (!this.isOnline) {
-      this.enqueueOperation('updateAccountBalance', { accountName, balance, type });
+      this.enqueueOperation('updateAccountBalance', queuePayload);
       return { success: true, queued: true };
     }
 
@@ -507,7 +509,8 @@ export class GoogleSheetsService {
         token: this.securityToken,
         accountName: accountName,
         balance: balance,
-        type: type
+        type: type,
+        ...(date ? { date } : {})
       };
 
       const controller = new AbortController();
@@ -525,7 +528,7 @@ export class GoogleSheetsService {
       return { success: res.status === 'success' };
     } catch (err) {
       console.warn('Update account balance offline, accodamento:', err.message);
-      this.enqueueOperation('updateAccountBalance', { accountName, balance, type });
+      this.enqueueOperation('updateAccountBalance', queuePayload);
       return { success: true, queued: true };
     }
   }

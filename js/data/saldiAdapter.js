@@ -186,14 +186,43 @@ export class SaldiAdapter {
     const activeHoldings = new Map();
     const seenAssetsAllHistory = new Set();
 
-    allProcessed.forEach(row => {
-      if (row.isSummary) return;
-      seenAssetsAllHistory.add(row.name);
+    const saldiRowsArr = Array.isArray(saldiRows) ? saldiRows : [];
+    const saldiNonSummaryMonths = new Set();
+    saldiRowsArr.forEach(raw => {
+      if (this.isSummaryRow(raw)) return;
+      const dInfo = this.parseDateInfo(raw.date);
+      if (dInfo) saldiNonSummaryMonths.add(dInfo.monthKey);
+    });
+    const hasStorico = Array.isArray(storicoRows) && storicoRows.length > 0;
+    const isSingleSnapshotMode = saldiRowsArr.length > 0 && (hasStorico || saldiNonSummaryMonths.size <= 2);
 
-      // Appartiene all'ultimo conguaglio certificato?
-      if (latestCheckpoint && row.dateInfo.monthKey === latestCheckpoint.monthKey) {
+    if (isSingleSnapshotMode) {
+      const latestByAsset = new Map();
+      saldiRowsArr.forEach(raw => {
+        if (this.isSummaryRow(raw)) return;
+        const dInfo = this.parseDateInfo(raw.date);
+        if (!dInfo) return;
+        const name = String(raw.name || '').trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        const existing = latestByAsset.get(key);
+        if (!existing || dInfo.timestamp >= existing.dateInfo.timestamp) {
+          latestByAsset.set(key, {
+            dateInfo: dInfo,
+            name,
+            type: String(raw.type || '').trim(),
+            balance: this.parseCurrency(raw.balance),
+            notes: String(raw.notes || '').trim()
+          });
+        }
+      });
+
+      allProcessed.forEach(row => {
+        if (!row.isSummary) seenAssetsAllHistory.add(row.name);
+      });
+
+      latestByAsset.forEach(row => {
         if (row.name.includes(' - ')) {
-          // Asset Broker (es. Trade Republic - XEON)
           const parts = row.name.split(' - ');
           const broker = parts[0].trim();
           const ticker = parts.slice(1).join(' - ').trim();
@@ -206,7 +235,6 @@ export class SaldiAdapter {
             notes: row.notes
           });
         } else {
-          // Conto standard
           activeAccounts.set(row.name, {
             balance: row.balance,
             type: row.type,
@@ -215,8 +243,40 @@ export class SaldiAdapter {
             lastReconciledMonth: row.dateInfo.monthKey
           });
         }
-      }
-    });
+      });
+    } else {
+      allProcessed.forEach(row => {
+        if (row.isSummary) return;
+        seenAssetsAllHistory.add(row.name);
+
+        // Appartiene all'ultimo conguaglio certificato?
+        if (latestCheckpoint && row.dateInfo.monthKey === latestCheckpoint.monthKey) {
+          if (row.name.includes(' - ')) {
+            // Asset Broker (es. Trade Republic - XEON)
+            const parts = row.name.split(' - ');
+            const broker = parts[0].trim();
+            const ticker = parts.slice(1).join(' - ').trim();
+            if (!activeHoldings.has(broker)) {
+              activeHoldings.set(broker, new Map());
+            }
+            activeHoldings.get(broker).set(ticker, {
+              balance: row.balance,
+              type: row.type,
+              notes: row.notes
+            });
+          } else {
+            // Conto standard
+            activeAccounts.set(row.name, {
+              balance: row.balance,
+              type: row.type,
+              notes: row.notes,
+              lastReconciledDate: row.dateInfo.formattedDate,
+              lastReconciledMonth: row.dateInfo.monthKey
+            });
+          }
+        }
+      });
+    }
 
     // 3. Rilevazione asset estinti (presenti in passato ma assenti nell'ultimo conguaglio)
     const extinctAssets = new Set();

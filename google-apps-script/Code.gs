@@ -168,7 +168,7 @@ function handleRequest(e, method) {
       }
 
       var tx = postData.transaction || postData;
-      var dateObj = tx.date ? new Date(tx.date) : new Date();
+      var dateObj = parseDateValue(tx.date);
       var d = dateObj.getDate();
       var m = dateObj.getMonth() + 1;
       var y = dateObj.getFullYear();
@@ -215,7 +215,7 @@ function handleRequest(e, method) {
       var tx = postData.transaction || postData;
 
       if (movSheet && rowNum > 1 && rowNum <= movSheet.getLastRow()) {
-        var dateObj = tx.date ? new Date(tx.date) : new Date();
+        var dateObj = parseDateValue(tx.date);
         var d = dateObj.getDate();
         var m = dateObj.getMonth() + 1;
         var y = dateObj.getFullYear();
@@ -270,6 +270,7 @@ function handleRequest(e, method) {
       var saldiSheet = ss.getSheetByName("Saldi");
       var targetAccount = postData.accountName || params.accountName;
       var newBalance = parseFloat(postData.balance || params.balance || 0);
+      var explicitDate = String(postData.date || params.date || "").trim();
 
       if (saldiSheet && targetAccount) {
         var lastRowSaldi = saldiSheet.getLastRow();
@@ -280,7 +281,12 @@ function handleRequest(e, method) {
           for (var k = sRows.length - 1; k >= 1; k--) {
             if (String(sRows[k][1] || "").toLowerCase().trim() === targetAccount.toLowerCase().trim()) {
               saldiSheet.getRange(k + 1, 4).setValue("€" + newBalance.toFixed(2).replace(".", ","));
-              saldiSheet.getRange(k + 1, 1).setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy"));
+              // Preserva la data di conguaglio esistente a meno che non venga passata esplicitamente (evita disallineamenti multi-mese)
+              if (explicitDate) {
+                var parsedExplicit = parseDateValue(explicitDate);
+                var formattedExplicit = Utilities.formatDate(parsedExplicit, Session.getScriptTimeZone(), "dd/MM/yyyy");
+                saldiSheet.getRange(k + 1, 1).setValue(formattedExplicit);
+              }
               updated = true;
               break;
             }
@@ -288,8 +294,9 @@ function handleRequest(e, method) {
         }
         if (!updated) {
           // Aggiunge nuova riga
-          var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
-          saldiSheet.appendRow([todayStr, targetAccount, postData.type || "Liquidità", "€" + newBalance.toFixed(2).replace(".", ","), "Aggiunto da WebApp"]);
+          var rowDateObj = explicitDate ? parseDateValue(explicitDate) : new Date();
+          var rowDateStr = Utilities.formatDate(rowDateObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
+          saldiSheet.appendRow([rowDateStr, targetAccount, postData.type || "Liquidità", "€" + newBalance.toFixed(2).replace(".", ","), "Aggiunto da WebApp"]);
         }
         clearAppCache();
         return createJsonResponse({ status: "success", message: "Saldo aggiornato con successo." });
@@ -379,6 +386,23 @@ function parseCurrency(val) {
   }
   var parsed = parseFloat(str);
   return isNaN(parsed) ? 0 : parsed;
+}
+
+// Helper per parsare in modo deterministico date DD/MM/YYYY e YYYY-MM-DD (evita inversioni MM/DD americane)
+function parseDateValue(val) {
+  if (!val) return new Date();
+  if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+  var s = String(val).trim();
+  var dmyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) {
+    return new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+  }
+  var isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10));
+  }
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? new Date() : d;
 }
 
 // Helper per parsare stringhe di data
