@@ -393,6 +393,55 @@ class FinanceStore {
     return clean.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || ('acc_' + Date.now());
   }
 
+  _isSummaryRowName(rawName, rawType = '') {
+    const n = String(rawName || '').trim().toLowerCase();
+    const tp = String(rawType || '').trim().toLowerCase();
+    if (!n) return false;
+    if (n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)') return true;
+    if (tp.includes('patrimonio complessivo') || tp.includes('disponibilità diretta')) return true;
+    return false;
+  }
+
+  _sanitizeClosingAccountsMap(accountsObj, totalNW = 0) {
+    if (!accountsObj || typeof accountsObj !== 'object') return {};
+    const cleaned = {};
+    const subSumsByBroker = {};
+
+    Object.entries(accountsObj).forEach(([name, rawBal]) => {
+      if (this._isSummaryRowName(name)) return;
+      const bal = parseFloat(rawBal);
+      if (isNaN(bal)) return;
+      cleaned[name] = bal;
+      if (name.includes(' - ')) {
+        const brokerKey = name.split(' - ')[0].trim().toLowerCase();
+        subSumsByBroker[brokerKey] = Math.round(((subSumsByBroker[brokerKey] || 0) + bal) * 100) / 100;
+      }
+    });
+
+    // Ripara eventuali chiusure legacy in localStorage in cui al conto broker genitore erano stati sommati i sottoconti ETF
+    let rawSum = Object.values(cleaned).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    const refTotal = parseFloat(totalNW) || 0;
+    Object.keys(cleaned).forEach(name => {
+      if (name.includes(' - ')) return;
+      const subSum = subSumsByBroker[name.trim().toLowerCase()] || 0;
+      if (subSum <= 0) return;
+      const parentVal = parseFloat(cleaned[name]) || 0;
+      const hasDoubleCountExcess = refTotal > 0 && (rawSum - refTotal) >= (subSum - 1.0);
+      const matchesSubSumExactly = Math.abs(parentVal - subSum) < 0.05;
+      if (parentVal >= subSum - 0.02 && (matchesSubSumExactly || hasDoubleCountExcess)) {
+        const restoredCash = Math.round((parentVal - subSum) * 100) / 100;
+        if (restoredCash <= 0.005) {
+          delete cleaned[name];
+        } else {
+          cleaned[name] = restoredCash;
+        }
+        rawSum -= subSum;
+      }
+    });
+
+    return cleaned;
+  }
+
   _parseSheetDateInfo(dateRaw) {
     if (!dateRaw) return null;
     const dateStr = String(dateRaw).trim();
@@ -531,15 +580,7 @@ class FinanceStore {
 
     // 2. Filtra righe riepilogative di 'Saldi' (es. TOTALE NET WORTH / TOTALE LIQUIDO & INVESTITO)
     const validSaldiRows = hasSaldi
-      ? data.saldi.filter(s => {
-          if (!s || !s.name) return false;
-          const n = String(s.name).trim().toLowerCase();
-          const tp = String(s.type || '').trim().toLowerCase();
-          if (!n) return false;
-          if (n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)') return false;
-          if (tp.includes('patrimonio complessivo') || tp.includes('disponibilità diretta')) return false;
-          return true;
-        })
+      ? data.saldi.filter(s => s && s.name && !this._isSummaryRowName(s.name, s.type))
       : [];
 
     // 2b. Integra in validSaldiRows eventuali conti o voucher certificati nell'ultimo conguaglio di data.storico ma assenti in Saldi
@@ -554,10 +595,7 @@ class FinanceStore {
 
       if (latestStoricoDateInfo) {
         data.storico.forEach(st => {
-          if (!st || !st.name) return;
-          const n = String(st.name).trim().toLowerCase();
-          const tp = String(st.type || '').trim().toLowerCase();
-          if (n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo') || tp.includes('disponibilità diretta')) return;
+          if (!st || !st.name || this._isSummaryRowName(st.name, st.type)) return;
 
           const dInfo = this._parseSheetDateInfo(st.date);
           if (dInfo && dInfo.monthKey === latestStoricoDateInfo.monthKey) {
@@ -627,16 +665,15 @@ class FinanceStore {
       ...(hasStorico ? data.storico : [])
     ];
     rowsToCheckForSummary.forEach(s => {
-      if (!s || !s.name) return;
+      if (!s || !s.name || !this._isSummaryRowName(s.name, s.type)) return;
+      const dInfo = this._parseSheetDateInfo(s.date);
+      const bal = parseFloat(s.balance);
+      if (!dInfo || isNaN(bal) || bal <= 0) return;
       const n = String(s.name).trim().toLowerCase();
       const tp = String(s.type || '').trim().toLowerCase();
-      const isSummary = n.startsWith('totale') || n.startsWith('total') || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
-      if (isSummary) {
-        const dInfo = this._parseSheetDateInfo(s.date);
-        const bal = parseFloat(s.balance);
-        if (dInfo && !isNaN(bal) && bal > 0) {
-          summaryRowsByMonth.set(dInfo.monthKey, bal);
-        }
+      const isPrimaryNW = n === 'totale net worth' || n === 'totale patrimonio' || n === 'net worth' || n === 'nw (eur)' || tp.includes('patrimonio complessivo');
+      if (isPrimaryNW || !summaryRowsByMonth.has(dInfo.monthKey)) {
+        summaryRowsByMonth.set(dInfo.monthKey, bal);
       }
     });
 
@@ -1014,17 +1051,19 @@ class FinanceStore {
       return false;
     });
 
-    // 5. Raggruppa tutte le righe storiche di Storico e Saldi per Mese e genera le Chiusure Mensili certificate
+    // 5. Raggruppa tutte le righe storiche valide di Storico e Saldi per Mese (escludendo i totali riepilogativi)
+    const validStoricoRows = hasStorico
+      ? data.storico.filter(st => st && st.name && !this._isSummaryRowName(st.name, st.type))
+      : [];
+
     const storicoMonths = new Set();
-    if (hasStorico) {
-      data.storico.forEach(st => {
-        const dInfo = this._parseSheetDateInfo(st.date);
-        if (dInfo) storicoMonths.add(dInfo.monthKey);
-      });
-    }
+    validStoricoRows.forEach(st => {
+      const dInfo = this._parseSheetDateInfo(st.date);
+      if (dInfo) storicoMonths.add(dInfo.monthKey);
+    });
 
     const allHistoricalSaldiRows = [
-      ...(hasStorico ? data.storico : []),
+      ...validStoricoRows,
       ...validSaldiRows
     ];
     const saldiByMonth = new Map();
@@ -1047,12 +1086,19 @@ class FinanceStore {
       }
     });
 
-    // Pulisce solo eventuali chiusure demo residue
+    // Pulisce chiusure demo, chiusure cloud obsolete non più presenti in saldiByMonth e residui riepilogativi/duplicati
+    const syncNow = new Date();
+    const curSyncMonthKey = `${String(syncNow.getMonth() + 1).padStart(2, '0')}/${syncNow.getFullYear()}`;
     if (this.monthlyClosings) {
       Object.keys(this.monthlyClosings).forEach(mKey => {
         const mc = this.monthlyClosings[mKey];
-        if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
+        const isDemo = mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts);
+        const isStaleCloudClosing = saldiByMonth.size > 0 && mc && mc.notes === 'Conguaglio Saldi Google Sheets' && !saldiByMonth.has(mKey);
+        if (isDemo || isStaleCloudClosing) {
           delete this.monthlyClosings[mKey];
+          if (isStaleCloudClosing) this.deleteNetWorthSnapshot(mKey);
+        } else if (mc && mc.accounts) {
+          mc.accounts = this._sanitizeClosingAccountsMap(mc.accounts, mc.totalNW);
         }
       });
     } else {
@@ -1064,12 +1110,16 @@ class FinanceStore {
       const uniqueRowsByName = new Map();
       group.rows.forEach(s => {
         const key = String(s.name || '').trim().toLowerCase();
-        if (key) uniqueRowsByName.set(key, s);
+        if (key && !this._isSummaryRowName(s.name, s.type)) uniqueRowsByName.set(key, s);
       });
       const dedupedRows = Array.from(uniqueRowsByName.values());
 
       // Evita di creare chiusure mensili parziali in caso di data isolata in Saldi su singolo conto
       if (isSingleSnapshotMode && hasStorico && !storicoMonths.has(mKey) && saldiMonths.size > 1 && !summaryRowsByMonth.has(mKey) && dedupedRows.length < latestClosingRows.length) {
+        if (this.monthlyClosings[mKey] && this.monthlyClosings[mKey].notes === 'Conguaglio Saldi Google Sheets') {
+          delete this.monthlyClosings[mKey];
+          this.deleteNetWorthSnapshot(mKey);
+        }
         return;
       }
 
@@ -1080,15 +1130,12 @@ class FinanceStore {
       dedupedRows.forEach(s => {
         const rawName = String(s.name || '').trim();
         const bal = parseFloat(s.balance);
-        if (!rawName || isNaN(bal)) return;
+        if (!rawName || isNaN(bal) || this._isSummaryRowName(rawName, s.type)) return;
 
+        closingAccounts[rawName] = bal;
         if (rawName.includes(' - ')) {
-          closingAccounts[rawName] = bal;
-          const brokerName = rawName.split(' - ')[0].trim();
-          closingAccounts[brokerName] = Math.round(((closingAccounts[brokerName] || 0) + bal) * 100) / 100;
           directNW += bal;
         } else {
-          closingAccounts[rawName] = bal;
           const lowerName = rawName.toLowerCase();
           const lowerType = String(s.type || '').toLowerCase();
           if (lowerName.includes('pensione') || lowerType.includes('previden')) {
@@ -1117,6 +1164,10 @@ class FinanceStore {
       };
       this.saveNetWorthSnapshot(mKey, totalNW);
     });
+
+    if (saldiByMonth.size > 0 && !this.monthlyClosings[curSyncMonthKey]) {
+      this.deleteNetWorthSnapshot(curSyncMonthKey);
+    }
 
     // Rigenera la serie storica ordinata per getHistoricalNetWorth
     const sortedClosings = Object.keys(this.monthlyClosings).map(mKey => {
@@ -2262,14 +2313,20 @@ class FinanceStore {
 
     // Se l'app ha chiusure salvate in localStorage (da Cloud Sync o backup caricato), usa quelle con precedenza assoluta
     if (closings && typeof closings === 'object' && Object.keys(closings).length > 0) {
-      if (isCloudSynced) {
-        Object.keys(closings).forEach(mKey => {
-          const mc = closings[mKey];
-          if (mc && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
-            delete closings[mKey];
-          }
-        });
-      }
+      Object.keys(closings).forEach(mKey => {
+        const mc = closings[mKey];
+        if (!mc || typeof mc !== 'object') {
+          delete closings[mKey];
+          return;
+        }
+        if (isCloudSynced && mc.accounts && ('Conto Corrente' in mc.accounts || 'Portafoglio Investimenti' in mc.accounts || 'Fondo Previdenza' in mc.accounts)) {
+          delete closings[mKey];
+          return;
+        }
+        if (mc.accounts && typeof mc.accounts === 'object') {
+          mc.accounts = this._sanitizeClosingAccountsMap(mc.accounts, mc.totalNW);
+        }
+      });
       return closings;
     }
 
@@ -2351,6 +2408,26 @@ class FinanceStore {
     return true;
   }
 
+  _resolveAccountBalanceInClosing(closingAccounts, acc) {
+    if (!closingAccounts || !acc) return null;
+    if (acc.isBroker && !acc.name.includes(' - ')) {
+      let brokerTotal = parseFloat(closingAccounts[acc.name]) || 0;
+      let found = typeof closingAccounts[acc.name] !== 'undefined';
+      Object.entries(closingAccounts).forEach(([k, v]) => {
+        if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
+          brokerTotal += (parseFloat(v) || 0);
+          found = true;
+        }
+      });
+      if (found) return Math.round(brokerTotal * 100) / 100;
+    }
+    if (typeof closingAccounts[acc.name] !== 'undefined') {
+      return closingAccounts[acc.name];
+    }
+    const matchKey = Object.keys(closingAccounts).find(k => this._isMatchingAccount(k, acc));
+    return matchKey ? closingAccounts[matchKey] : null;
+  }
+
   // Calcola il saldo retroattivo o proiettato di un conto a fine di un mese specifico combinando Conguagli e Movimenti
   calculateAccountBalanceAtEndOfMonth(acc, targetMonthKey) {
     if (!acc || !targetMonthKey) return 0;
@@ -2364,24 +2441,8 @@ class FinanceStore {
     // 0. Se la chiusura mensile del mese target ha già registrato questo conto o sub-asset, usalo subito
     const targetClosing = this.monthlyClosings ? this.monthlyClosings[targetMonthKey] : null;
     if (targetClosing && targetClosing.accounts) {
-      if (typeof targetClosing.accounts[acc.name] !== 'undefined') {
-        return targetClosing.accounts[acc.name];
-      }
-      const matchKey = Object.keys(targetClosing.accounts).find(k => this._isMatchingAccount(k, acc));
-      if (matchKey) {
-        return targetClosing.accounts[matchKey];
-      }
-      if (acc.isBroker) {
-        let brokerSubSum = 0;
-        let found = false;
-        Object.entries(targetClosing.accounts).forEach(([k, v]) => {
-          if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
-            brokerSubSum += (parseFloat(v) || 0);
-            found = true;
-          }
-        });
-        if (found && brokerSubSum > 0) return Math.round(brokerSubSum * 100) / 100;
-      }
+      const exactBal = this._resolveAccountBalanceInClosing(targetClosing.accounts, acc);
+      if (exactBal !== null && !isNaN(exactBal)) return exactBal;
     }
 
     // 1. Previdenza Complementare (Fondo Pensione): usa la serie continua e interpolata di getPensionHistory()
@@ -2423,24 +2484,7 @@ class FinanceStore {
     if (this.monthlyClosings) {
       Object.entries(this.monthlyClosings).forEach(([mKey, c]) => {
         if (!c || !c.accounts) return;
-        let cBal = null;
-        if (typeof c.accounts[acc.name] !== 'undefined') {
-          cBal = c.accounts[acc.name];
-        } else {
-          const matchKey = Object.keys(c.accounts).find(k => this._isMatchingAccount(k, acc));
-          if (matchKey) cBal = c.accounts[matchKey];
-          else if (acc.isBroker) {
-            let brokerSubSum = 0;
-            let found = false;
-            Object.entries(c.accounts).forEach(([k, v]) => {
-              if (k.toLowerCase().startsWith(acc.name.toLowerCase() + ' - ') || (acc.id === 'trade_republic' && k.toLowerCase().startsWith('trade republic - '))) {
-                brokerSubSum += (parseFloat(v) || 0);
-                found = true;
-              }
-            });
-            if (found && brokerSubSum > 0) cBal = brokerSubSum;
-          }
-        }
+        const cBal = this._resolveAccountBalanceInClosing(c.accounts, acc);
         if (cBal !== null && !isNaN(cBal)) {
           const [cmStr, cyStr] = mKey.split('/');
           const cTs = new Date(parseInt(cyStr, 10), parseInt(cmStr, 10), 0, 23, 59, 59).getTime();
@@ -2778,13 +2822,8 @@ class FinanceStore {
         if (prevClosing && typeof prevClosing.totalNW === 'number' && prevClosing.totalNW > 0) {
           prevVal = prevClosing.totalNW;
         } else if (prevClosing && prevClosing.accounts) {
-          const keysLower = new Set(Object.keys(prevClosing.accounts).map(k => k.toLowerCase()));
-          Object.entries(prevClosing.accounts).forEach(([name, bal]) => {
-            const nLower = name.toLowerCase();
-            if (nLower.includes(' - ')) {
-              const parent = nLower.split(' - ')[0].trim();
-              if (keysLower.has(parent)) return;
-            }
+          const cleanPrevAccounts = this._sanitizeClosingAccountsMap(prevClosing.accounts, prevClosing.totalNW);
+          Object.values(cleanPrevAccounts).forEach(bal => {
             prevVal += (parseFloat(bal) || 0);
           });
         }
@@ -2941,18 +2980,10 @@ class FinanceStore {
     const nwMap = new Map();
     const isSnapshotMap = new Map();
 
-    const computeTotalFromAccountsMap = (accountsObj) => {
+    const computeTotalFromAccountsMap = (accountsObj, totalNW = 0) => {
       if (!accountsObj || typeof accountsObj !== 'object') return 0;
-      let tot = 0;
-      const keysLower = new Set(Object.keys(accountsObj).map(k => k.toLowerCase()));
-      Object.entries(accountsObj).forEach(([name, bal]) => {
-        const nLower = name.toLowerCase();
-        if (nLower.includes(' - ')) {
-          const parentBroker = nLower.split(' - ')[0].trim();
-          if (keysLower.has(parentBroker)) return;
-        }
-        tot += (parseFloat(bal) || 0);
-      });
+      const cleaned = this._sanitizeClosingAccountsMap(accountsObj, totalNW);
+      const tot = Object.values(cleaned).reduce((sum, bal) => sum + (parseFloat(bal) || 0), 0);
       return Math.round(tot * 100) / 100;
     };
 

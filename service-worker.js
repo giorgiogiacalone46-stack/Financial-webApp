@@ -3,7 +3,7 @@
  * Architettura Local-First & 100% Offline Resilience (Apple HIG)
  */
 
-const CACHE_NAME = 'finanze-cache-v2026.46';
+const CACHE_NAME = 'finanze-cache-v2026.51';
 
 const STATIC_ASSETS = [
   './',
